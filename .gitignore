@@ -1,0 +1,6 @@
+*.js
+*.data
+*.pyc
+routers/
+logs/
+
