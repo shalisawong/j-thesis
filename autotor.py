@@ -268,11 +268,11 @@ class MultiLogFile(object):
         for line in f:
             i += 1
             if i % 50000 == 0: print i
-            if line[27:31] == 'RRC:':
+            if line[29:32] == 'RRC':
                 split = line.split(' ')
                 time = ' '.join(split[0:3])
                 src_addr,dst_addr = split[5],split[7]
-                circ = ' '.join(split[-3:])[1:-1]
+                circ = ' '.join(split[-3:])[0:-1]
                 if circ not in self.circs:
                     self.circs[circ] = {
                             'times':[lf.time_from_string(time)],
