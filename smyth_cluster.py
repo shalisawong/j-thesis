@@ -1,24 +1,44 @@
 from ghmm import *
-from sklearn.cluster import Ward
-from numpy import std, mean
+from sklearn.cluster import k_means
+from numpy import std, mean, array
+from numpy import float as npfloat
+from scipy.cluster.hierarchy import complete, fcluster
 from pprint import pprint
-from math import exp
 
-def getDefaultHMM(s, m, sigma):
-	stddev = std(s)
-	mu = mean(s)
+EPSILON = .00001
+
+def getDefaultHMM(S, m, sigma):
 	A = [[1.0/m] * m] * m
-	B = [(mu, stddev)] * m
+	B = getEmissionDistribution(S, m)
 	distr = GaussianDistribution(None)
-	distr.set((mu, stddev))
 	pi = [1.0/m] * m
 	return HMMFromMatrices(sigma, distr, A, B, pi)
+
+def getEmissionDistribution(S, m):
+	vectorized = []
+	for s in S:
+		for o in s:
+			vectorized.append([o])
+
+	centroids, labels, inertia = k_means(vectorized, m)
+	clusters = [[] for i in xrange(0, m)]
+	for i in xrange(0, len(labels)):
+		clusters[labels[i]].append(s[i])
+
+	B = []
+	for cluster in clusters:
+		mu = mean(cluster)
+		stddev = std(cluster) or EPSILON	# The gaussian is undefined for
+											# standard deviation of 0, which
+											# can happen on uniform data
+		B.append((mu, stddev))
+
+	return B
 
 def compositeHMM(hmms, weights):
 	pi = []
 	B = []
 	As = []
-
 	for k in range(0, len(hmms)):
 		hmm = hmms[k]
 		weight = weights[k]
@@ -33,11 +53,6 @@ def compositeHMM(hmms, weights):
 				a[i][j] = state.getOutProb(j)
 
 		As.append(a)
-
-	A = blockDiagMatrix(As)
-	pprint(pi)
-	pprint(A)
-	pprint(B)
 
 	return HMMFromMatrices(Float(), GaussianDistribution(None), A, B, pi)
 
@@ -84,9 +99,20 @@ def blockDiagMatrix(matrices):
 
 	return block_diag
 
-def hmmCluster(S, m):
-	hmms = [getDefaultHMM(s, m, Float()) for s in S]
-	print compositeHMM(hmms, [.333, .333, .333])
+def clusterFromDMatrix(S, k, dmatrix):
+	clustering = complete(array(dmatrix, npfloat))
+	assignments = fcluster(clustering, k, 'maxclust')
+	clusters = [[] for i in range(0, k)]
+	for i in range(0, len(assignments)):
+		clusters[assignments[i]-1].append(S[i])
+
+	return [SequenceSet(Float(), c) for c in clusters]
+
+def singleton(s):
+	return SequenceSet(Float(), [s])
+
+def hmmCluster(S, m, k):
+	hmms = [getDefaultHMM(singleton(s), m, Float()) for s in S]
 	dmatrix = zeroMatrix(len(S), len(S))
 	max_l = float('-inf')
 
@@ -102,12 +128,18 @@ def hmmCluster(S, m):
 	for j in xrange(0, len(S)):
 		dmatrix[j] = map(lambda l: max_l - l, dmatrix[j])
 
-	return dmatrix
+	clustering = clusterFromDMatrix(S, k, dmatrix)
+	new_hmms = [getDefaultHMM(c, m, Float()) for c in clustering]
+	return new_hmms
 
 
 seqs = SequenceSet(Float(), [EmissionSequence(Float(), [1, 2, 3, 5, 6, 7, 9]),
-							 EmissionSequence(Float(), [5, 19, 4, 9, 4, 12, 9]),
-							 EmissionSequence(Float(), [1, 2, 3, 7, 6, 9, 9])])
-pprint(hmmCluster(seqs, 2))
+ 							 EmissionSequence(Float(), [5, 19, 4, 9, 4, 12, 9]),
+ 							 EmissionSequence(Float(), [1, 2, 3, 7, 6, 9, 9])])
+
+
+
+clustering = hmmCluster(seqs, 4, 2)
+pprint(clustering)
 
 
