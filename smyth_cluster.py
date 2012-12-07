@@ -1,3 +1,10 @@
+"""
+An implementation of Smyth 1997's HMM clustering algorithm. Currently
+only supports time series data with 1-dimensional observations.
+
+@author Julian Applebaum
+"""
+
 from ghmm import *
 from sklearn.cluster import k_means
 from numpy import std, mean, array
@@ -114,11 +121,14 @@ def singleton(s):
 	return SequenceSet(Float(), [s])
 
 def hmmCluster(S, m, k):
+	print "Creating initial HMMs... ",
 	hmms = [getDefaultHMM(singleton(s), m, Float()) for s in S]
+	print "done"
 	dmatrix = zeroMatrix(len(S), len(S))
 	max_l = float('-inf')
 
-	# compute the symmetrized similarity matrix
+	print "Computing HMM distance matrix... ",
+	# compute the symmetrized dissimilarity matrix
 	for j in xrange(0, len(S)):
 		for i in xrange(0, len(S)):
 			si_mj = hmms[j].loglikelihood(S[i])
@@ -128,21 +138,46 @@ def hmmCluster(S, m, k):
 			dmatrix[j][i] = sym
 
 	for j in xrange(0, len(S)):
-		dmatrix[j] = map(lambda l: max_l - l, dmatrix[j])
+		dmatrix[j] = map(lambda l: -l, dmatrix[j])
+	print "done"
 
+
+	print "Clustering on HMM distance matrix... ",
 	clustering = clusterFromDMatrix(S, k, dmatrix)
+	print "done"
+	print "Computing new default HMMs from clusters... ",
 	new_hmms = [getDefaultHMM(c, m, Float()) for c in clustering]
+	print "done"
 	weights = [len(c) for c in clustering]
 	composite = compositeHMM(new_hmms, weights)
+	print "Performing Baum-Welch re-estimation... ",
 	composite.baumWelch(S)
+	print "done"
 	return composite
-
 
 # seqs = SequenceSet(Float(), [EmissionSequence(Float(), [1, 2, 3, 5, 6, 7, 9]),
 #  							 EmissionSequence(Float(), [5, 19, 4, 9, 4, 12, 9]),
 #  							 EmissionSequence(Float(), [1, 2, 3, 7, 6, 9, 9])])
 
-hmm = hmmCluster(seqs, 2, 2)
-print hmm
+if __name__ == "__main__":
+	A_1 = [[.6, .4],
+		   [.4, .6]]
+	A_2 = [[.4, .6],
+ 		   [.6, .4]]
+ 	B_1 = [(0, 1), (0, 1)]
+ 	B_2 = [(3, 1), (3, 1)]
+ 	pi_1 = [.5, .5]
+ 	pi_2 = [.5, .5]
 
+ 	HMM_1 = HMMFromMatrices(Float(), GaussianDistribution(None), A_1, B_1, pi_1)
+  	HMM_2 = HMMFromMatrices(Float(), GaussianDistribution(None), A_2, B_2, pi_2)
 
+  	print "Creating sample data... ",
+  	S_1 = [HMM_1.sampleSingle(200, 1) for i in xrange(0, 20)]
+  	S_2 = [HMM_2.sampleSingle(200, 1) for i in xrange(0, 20)]
+  	S = SequenceSet(Float(), S_1 + S_2)
+  	print "done"
+
+	hmm = hmmCluster(S, 2, 2)
+	print "******************"
+	print hmm
