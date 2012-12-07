@@ -25,25 +25,56 @@ def getDefaultHMM(S, m, sigma):
 	pi = [1.0/m] * m
 	return HMMFromMatrices(sigma, distr, A, B, pi)
 
+
+def initCenters(S, m):
+	flattened = []
+	centers = []
+	for s in S:
+		for o in s:
+			flattened.append(o)
+
+	flattened.sort()
+
+	incr = len(flattened)/m
+	for i in range(0, m):
+		centers.append([flattened[i*incr-1]])
+
+	return array(centers, npfloat)
+
 def getEmissionDistribution(S, m):
 	"""
 	Partition the individual observations in S into m clusters,
 	then calculate the mean and standard deviation of each one.
 	Returns an emission distribution for use with the Gaussian HMM.
 	"""
-	vectorized = []
+	flattened = []
 	for s in S:
 		for o in s:
-			vectorized.append([o])
+			flattened.append(o)
 
+	vectorized = [[o] for o in flattened]
 	centroids, labels, inertia = k_means(vectorized, m)
+
+	# if len(S) > 1:
+	# 	print centroids
+
 	clusters = [[] for i in xrange(0, m)]
-	for s in S:
-		for i in xrange(0, len(s)):
-			clusters[labels[i]].append(s[i])
+	for i in xrange(0, len(flattened)):
+		clusters[labels[i]].append(flattened[i])
 
 	B = []
 	for cluster in clusters:
+		# if len(S) > 1:
+		# 	freqs = {}
+		# 	for i in cluster:
+		# 		trunc = int(i)
+		# 		if trunc not in freqs: freqs[trunc] = 1
+		# 		else: 				   freqs[trunc] += 1
+
+		# 	print "----------"
+		# 	for i in sorted(freqs.keys()):
+		# 		print "%i: %i" % (i, freqs[i])
+		# 	print "----------"
 		mu = mean(cluster)
 		stddev = std(cluster) or EPSILON	# The Gaussian is undefined for
 		B.append((mu, stddev))				# standard deviation of 0, which
@@ -84,7 +115,8 @@ def zeroMatrix(c, r):
 	matrix = []
 	for i in range(0, r):
 		matrix.append([0]*c)
-	return matrix
+
+	return array(matrix, npfloat)
 
 def blockDiagMatrix(matrices):
 	"""
@@ -125,7 +157,7 @@ def clusterFromDMatrix(S, k, dmatrix):
 	Given a distance matrix dmatrix, partition the sequences in S into
 	k clusters via hierarchical, complete linkage clustering.
 	"""
-	clustering = complete(array(dmatrix, npfloat))
+	clustering = complete(dmatrix)
 	assignments = fcluster(clustering, k, 'maxclust')
 	clusters = [[] for i in range(0, k)]
 	for i in range(0, len(assignments)):
@@ -160,17 +192,21 @@ def hmmCluster(S, m, k):
 	print "Computing symmetrized HMM distance matrix... ",
 	for j in xrange(0, N):
 		for i in xrange(0, N):
-			si_mj = hmms[j].loglikelihood(S[i])
-			sj_mi = hmms[i].loglikelihood(S[j])
-			sym = (si_mj + sj_mi)/2.0
-			max_l = max(max_l, sym)
-			dmatrix[j][i] = -1 * sym
+			if (j > i):
+				dmatrix[j][i] = 0
+			else:
+				si_mj = hmms[j].loglikelihood(S[i])
+				sj_mi = hmms[i].loglikelihood(S[j])
+				sym = (si_mj + sj_mi)/2.0
+				max_l = max(max_l, sym)
+				dmatrix[j][i] = -1 * sym
 
 	print "done"
 	print "Clustering on HMM distance matrix... ",
 	clustering = clusterFromDMatrix(S, k, dmatrix)
 	print "done"
 	print "Computing new default HMMs from clusters... ",
+	print
 	new_hmms = [getDefaultHMM(c, m, Float()) for c in clustering]
 	print "done"
 	weights = [1.0*len(c)/N for c in clustering]
@@ -187,7 +223,7 @@ if __name__ == "__main__":
 	A_2 = [[.4, .6],
  		   [.6, .4]]
  	B_1 = [(0, 1), (3, 1)]
- 	B_2 = [(10, 1), (20, 1)]
+ 	B_2 = [(0, 1), (3, 1)]
  	pi_1 = [.5, .5]
  	pi_2 = [.5, .5]
 
@@ -217,4 +253,3 @@ if __name__ == "__main__":
 	print "Cluster 2 has %i sequences from HMM 1, %i from HMM 2" % \
 		(len(sample_1)-n_11, len(clustering[1]) - len(sample_1) + n_11)
 	print hmm
-
