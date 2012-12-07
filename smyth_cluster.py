@@ -15,6 +15,10 @@ from pprint import pprint
 EPSILON = .00001
 
 def getDefaultHMM(S, m, sigma):
+	"""
+	Initialize a m state HMM with emission domain sigma using
+	Smyth's "default" method.
+	"""
 	A = [[1.0/m] * m] * m
 	B = getEmissionDistribution(S, m)
 	distr = GaussianDistribution(None)
@@ -22,6 +26,11 @@ def getDefaultHMM(S, m, sigma):
 	return HMMFromMatrices(sigma, distr, A, B, pi)
 
 def getEmissionDistribution(S, m):
+	"""
+	Partition the individual observations in S into m clusters,
+	then calculate the mean and standard deviation of each one.
+	Returns an emission distribution for use with the Gaussian HMM.
+	"""
 	vectorized = []
 	for s in S:
 		for o in s:
@@ -42,6 +51,11 @@ def getEmissionDistribution(S, m):
 	return B
 
 def compositeHMM(hmms, weights):
+	"""
+	Combine hmms into one composite HMM with a block diagonal
+	transition matrix. Initial state probabilities are weighted
+	by corresponding values in weights.
+	"""
 	pi = []
 	B = []
 	As = []
@@ -107,6 +121,10 @@ def blockDiagMatrix(matrices):
 	return block_diag
 
 def clusterFromDMatrix(S, k, dmatrix):
+	"""
+	Given a distance matrix dmatrix, partition the sequences in S into
+	k clusters via hierarchical, complete linkage clustering.
+	"""
 	clustering = complete(array(dmatrix, npfloat))
 	assignments = fcluster(clustering, k, 'maxclust')
 	clusters = [[] for i in range(0, k)]
@@ -116,15 +134,22 @@ def clusterFromDMatrix(S, k, dmatrix):
 	return [SequenceSet(Float(), c) for c in clusters]
 
 def singleton(s):
+	"""Create singleton seqence set"""
 	return SequenceSet(Float(), [s])
 
 def sequenceEq(s1, s2):
+	"""True if s1 = s2, false otherwise"""
 	for i in range(0, len(s1)):
 		if s1[i] != s2[i]: return False
 
 	return True
 
 def hmmCluster(S, m, k):
+	"""
+	Create a m*k state HMM mixture modeling the seuquences in S.
+	The HMM is returned as well as the clustering result used for
+	the mixture components.
+	"""
 	N = len(S)
 	print "Creating initial HMMs... ",
 	hmms = [getDefaultHMM(singleton(s), m, Float()) for s in S]
@@ -132,8 +157,7 @@ def hmmCluster(S, m, k):
 	dmatrix = zeroMatrix(len(S), len(S))
 	max_l = float('-inf')
 
-	print "Computing HMM distance matrix... ",
-	# compute the symmetrized dissimilarity matrix
+	print "Computing symmetrized HMM distance matrix... ",
 	for j in xrange(0, N):
 		for i in xrange(0, N):
 			si_mj = hmms[j].loglikelihood(S[i])
@@ -151,19 +175,19 @@ def hmmCluster(S, m, k):
 	print "done"
 	weights = [1.0*len(c)/N for c in clustering]
 	composite = compositeHMM(new_hmms, weights)
-	#print composite
 	print "Performing Baum-Welch re-estimation... ",
 	composite.baumWelch(S)
 	print "done"
 	return (composite, clustering)
 
+# Run the experiment Smyth details
 if __name__ == "__main__":
 	A_1 = [[.6, .4],
 		   [.4, .6]]
 	A_2 = [[.4, .6],
  		   [.6, .4]]
  	B_1 = [(0, 1), (3, 1)]
- 	B_2 = [(0, 1), (3, 1)]
+ 	B_2 = [(10, 1), (20, 1)]
  	pi_1 = [.5, .5]
  	pi_2 = [.5, .5]
 
