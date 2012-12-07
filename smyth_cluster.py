@@ -22,13 +22,14 @@ def getEmissionDistribution(S, m):
 
 	centroids, labels, inertia = k_means(vectorized, m)
 	clusters = [[] for i in xrange(0, m)]
-	for i in xrange(0, len(labels)):
-		clusters[labels[i]].append(s[i])
+	for s in S:
+		for i in xrange(0, len(s)):
+			clusters[labels[i]].append(s[i])
 
 	B = []
 	for cluster in clusters:
 		mu = mean(cluster)
-		stddev = std(cluster) or EPSILON	# The gaussian is undefined for
+		stddev = std(cluster) or EPSILON	# The Gaussian is undefined for
 											# standard deviation of 0, which
 											# can happen on uniform data
 		B.append((mu, stddev))
@@ -54,6 +55,7 @@ def compositeHMM(hmms, weights):
 
 		As.append(a)
 
+	A = blockDiagMatrix(As)
 	return HMMFromMatrices(Float(), GaussianDistribution(None), A, B, pi)
 
 def zeroMatrix(c, r):
@@ -130,16 +132,17 @@ def hmmCluster(S, m, k):
 
 	clustering = clusterFromDMatrix(S, k, dmatrix)
 	new_hmms = [getDefaultHMM(c, m, Float()) for c in clustering]
-	return new_hmms
+	weights = [len(c) for c in clustering]
+	composite = compositeHMM(new_hmms, weights)
+	composite.baumWelch(S)
+	return composite
 
 
-seqs = SequenceSet(Float(), [EmissionSequence(Float(), [1, 2, 3, 5, 6, 7, 9]),
- 							 EmissionSequence(Float(), [5, 19, 4, 9, 4, 12, 9]),
- 							 EmissionSequence(Float(), [1, 2, 3, 7, 6, 9, 9])])
+# seqs = SequenceSet(Float(), [EmissionSequence(Float(), [1, 2, 3, 5, 6, 7, 9]),
+#  							 EmissionSequence(Float(), [5, 19, 4, 9, 4, 12, 9]),
+#  							 EmissionSequence(Float(), [1, 2, 3, 7, 6, 9, 9])])
 
-
-
-clustering = hmmCluster(seqs, 4, 2)
-pprint(clustering)
+hmm = hmmCluster(seqs, 2, 2)
+print hmm
 
 
