@@ -37,10 +37,8 @@ def getEmissionDistribution(S, m):
 	for cluster in clusters:
 		mu = mean(cluster)
 		stddev = std(cluster) or EPSILON	# The Gaussian is undefined for
-											# standard deviation of 0, which
+		B.append((mu, stddev))				# standard deviation of 0, which
 											# can happen on uniform data
-		B.append((mu, stddev))
-
 	return B
 
 def compositeHMM(hmms, weights):
@@ -120,7 +118,14 @@ def clusterFromDMatrix(S, k, dmatrix):
 def singleton(s):
 	return SequenceSet(Float(), [s])
 
+def sequenceEq(s1, s2):
+	for i in range(0, len(s1)):
+		if s1[i] != s2[i]: return False
+
+	return True
+
 def hmmCluster(S, m, k):
+	N = len(S)
 	print "Creating initial HMMs... ",
 	hmms = [getDefaultHMM(singleton(s), m, Float()) for s in S]
 	print "done"
@@ -129,55 +134,63 @@ def hmmCluster(S, m, k):
 
 	print "Computing HMM distance matrix... ",
 	# compute the symmetrized dissimilarity matrix
-	for j in xrange(0, len(S)):
-		for i in xrange(0, len(S)):
+	for j in xrange(0, N):
+		for i in xrange(0, N):
 			si_mj = hmms[j].loglikelihood(S[i])
 			sj_mi = hmms[i].loglikelihood(S[j])
 			sym = (si_mj + sj_mi)/2.0
 			max_l = max(max_l, sym)
-			dmatrix[j][i] = sym
+			dmatrix[j][i] = -1 * sym
 
-	for j in xrange(0, len(S)):
-		dmatrix[j] = map(lambda l: -l, dmatrix[j])
 	print "done"
-
-
 	print "Clustering on HMM distance matrix... ",
 	clustering = clusterFromDMatrix(S, k, dmatrix)
 	print "done"
 	print "Computing new default HMMs from clusters... ",
 	new_hmms = [getDefaultHMM(c, m, Float()) for c in clustering]
 	print "done"
-	weights = [len(c) for c in clustering]
+	weights = [1.0*len(c)/N for c in clustering]
 	composite = compositeHMM(new_hmms, weights)
+	#print composite
 	print "Performing Baum-Welch re-estimation... ",
 	composite.baumWelch(S)
 	print "done"
-	return composite
-
-# seqs = SequenceSet(Float(), [EmissionSequence(Float(), [1, 2, 3, 5, 6, 7, 9]),
-#  							 EmissionSequence(Float(), [5, 19, 4, 9, 4, 12, 9]),
-#  							 EmissionSequence(Float(), [1, 2, 3, 7, 6, 9, 9])])
+	return (composite, clustering)
 
 if __name__ == "__main__":
 	A_1 = [[.6, .4],
 		   [.4, .6]]
 	A_2 = [[.4, .6],
  		   [.6, .4]]
- 	B_1 = [(0, 1), (0, 1)]
- 	B_2 = [(3, 1), (3, 1)]
+ 	B_1 = [(0, 1), (3, 1)]
+ 	B_2 = [(0, 1), (3, 1)]
  	pi_1 = [.5, .5]
  	pi_2 = [.5, .5]
 
- 	HMM_1 = HMMFromMatrices(Float(), GaussianDistribution(None), A_1, B_1, pi_1)
-  	HMM_2 = HMMFromMatrices(Float(), GaussianDistribution(None), A_2, B_2, pi_2)
+ 	HMM_1 = HMMFromMatrices(Float(), GaussianDistribution(None), A_1, B_1, pi_1, "HMM_1")
+  	HMM_2 = HMMFromMatrices(Float(), GaussianDistribution(None), A_2, B_2, pi_2, "HMM_2")
 
   	print "Creating sample data... ",
-  	S_1 = [HMM_1.sampleSingle(200, 1) for i in xrange(0, 20)]
-  	S_2 = [HMM_2.sampleSingle(200, 1) for i in xrange(0, 20)]
-  	S = SequenceSet(Float(), S_1 + S_2)
+  	sample_1 = HMM_1.sample(20, 200, 1)
+  	sample_2 = HMM_2.sample(20, 200, 1)
+  	S = SequenceSet(Float(), [])
+  	S.merge(sample_1)
+  	S.merge(sample_2)
   	print "done"
 
-	hmm = hmmCluster(S, 2, 2)
+	hmm, clustering = hmmCluster(S, 2, 2)
+	n_11 = 0
+	for s in sample_1:
+		for s_c1 in clustering[0]:
+			if sequenceEq(s, s_c1):
+				n_11 += 1
+
 	print "******************"
+	print "Cluster 1 has %i sequences" % len(clustering[0])
+	print "Cluster 2 has %i sequences" % len(clustering[1])
+	print "Cluster 1 has %i sequences from HMM 1, %i from HMM 2" % \
+		(n_11, len(clustering[0]) - n_11)
+	print "Cluster 2 has %i sequences from HMM 1, %i from HMM 2" % \
+		(len(sample_1)-n_11, len(clustering[1]) - len(sample_1) + n_11)
 	print hmm
+
