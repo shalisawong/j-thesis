@@ -25,22 +25,6 @@ def getDefaultHMM(S, m, sigma):
 	pi = [1.0/m] * m
 	return HMMFromMatrices(sigma, distr, A, B, pi)
 
-
-def initCenters(S, m):
-	flattened = []
-	centers = []
-	for s in S:
-		for o in s:
-			flattened.append(o)
-
-	flattened.sort()
-
-	incr = len(flattened)/m
-	for i in range(0, m):
-		centers.append([flattened[i*incr-1]])
-
-	return array(centers, npfloat)
-
 def getEmissionDistribution(S, m):
 	"""
 	Partition the individual observations in S into m clusters,
@@ -206,11 +190,11 @@ def hmmCluster(S, m, k):
 	clustering = clusterFromDMatrix(S, k, dmatrix)
 	print "done"
 	print "Computing new default HMMs from clusters... ",
-	print
 	new_hmms = [getDefaultHMM(c, m, Float()) for c in clustering]
 	print "done"
 	weights = [1.0*len(c)/N for c in clustering]
 	composite = compositeHMM(new_hmms, weights)
+	print composite
 	print "Performing Baum-Welch re-estimation... ",
 	composite.baumWelch(S)
 	print "done"
@@ -227,12 +211,13 @@ if __name__ == "__main__":
  	pi_1 = [.5, .5]
  	pi_2 = [.5, .5]
 
- 	HMM_1 = HMMFromMatrices(Float(), GaussianDistribution(None), A_1, B_1, pi_1, "HMM_1")
-  	HMM_2 = HMMFromMatrices(Float(), GaussianDistribution(None), A_2, B_2, pi_2, "HMM_2")
+ 	distr = GaussianDistribution(None)
+ 	HMM_1 = HMMFromMatrices(Float(), distr, A_1, B_1, pi_1, "HMM_1")
+  	HMM_2 = HMMFromMatrices(Float(), distr, A_2, B_2, pi_2, "HMM_2")
 
   	print "Creating sample data... ",
-  	sample_1 = HMM_1.sample(20, 200, 1)
-  	sample_2 = HMM_2.sample(20, 200, 1)
+  	sample_1 = HMM_1.sample(20, 200)
+  	sample_2 = HMM_2.sample(20, 200)
   	S = SequenceSet(Float(), [])
   	S.merge(sample_1)
   	S.merge(sample_2)
