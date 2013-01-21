@@ -9,10 +9,11 @@ from ghmm import *
 from sklearn.cluster import k_means
 from numpy import std, mean, array
 from numpy import float as npfloat
-from scipy.cluster.hierarchy import complete, fcluster
-from pprint import pprint
 from sample_gen import smyth_example
-from matrix_utils import compositeHMM, uniformMatrix
+from matrix_utils import uniformMatrix
+from cluster_utils import clusterFromDMatrix
+from hmm_utils import compositeHMM
+from pprint import pprint
 
 EPSILON = .00001
 
@@ -39,7 +40,6 @@ def getEmissionDistribution(S, m):
 			flattened.append(o)
 
 	vectorized = [[o] for o in flattened]
-	print vectorized
 	centroids, labels, inertia = k_means(vectorized, m)
 
 	clusters = [[] for i in xrange(0, m)]
@@ -53,19 +53,6 @@ def getEmissionDistribution(S, m):
 		B.append((mu, stddev))				# standard deviation of 0, which
 											# can happen on uniform data
 	return B
-
-def clusterFromDMatrix(S, k, dmatrix):
-	"""
-	Given a distance matrix dmatrix, partition the sequences in S into
-	k clusters via hierarchical, complete linkage clustering.
-	"""
-	clustering = complete(dmatrix)
-	assignments = fcluster(clustering, k, 'maxclust')
-	clusters = [[] for i in range(0, k)]
-	for i in range(0, len(assignments)):
-		clusters[assignments[i]-1].append(S[i])
-
-	return [SequenceSet(Float(), c) for c in clusters]
 
 def singleton(s):
 	"""Create singleton seqence set"""
@@ -112,7 +99,6 @@ def hmmCluster(S, m, k, silent=True):
 	if not silent: print "done"
 	weights = [1.0*len(c)/N for c in clustering]
 	composite = compositeHMM(new_hmms, weights)
-	if not silent: print composite
 	if not silent: print "Performing Baum-Welch re-estimation... ",
 	composite.baumWelch(S)
 	if not silent: print "done"
@@ -124,8 +110,4 @@ if __name__ == "__main__":
   	S = smyth_example()
   	print "done"
 	hmm, clustering = hmmCluster(S, 2, 2)
-
-	for cluster in clustering:
-		print "Cluster size:", len(cluster)
-
 	print hmm

@@ -5,7 +5,7 @@ An implementation of Smyth 1997's Monte Carlo cross validation procedure
 """
 
 import smyth
-from random import shuffle, seed
+from random import shuffle, random
 from pprint import pprint
 from ghmm import SequenceSet, Float
 from sample_gen import smyth_example
@@ -34,8 +34,7 @@ def computeLikelihood(S_test, S_train, m, k):
 	return hmm.loglikelihood(S_test)
 
 if __name__ == "__main__":
-	seed(20)
-	S = smyth_example(n=5)
+	S = smyth_example(n=20)
 	k_likelihoods = {}
 
 	for i in xrange(0, N_SAMPLES):
