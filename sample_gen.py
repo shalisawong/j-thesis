@@ -1,23 +1,52 @@
 from ghmm import GaussianDistribution, Float, SequenceSet, HMMFromMatrices
 
-def smyth_example(seed1=0, seed2=10, n=20):
-	A_1 = [[.6, .4],
-		   [.4, .6]]
-	A_2 = [[.4, .6],
- 		   [.6, .4]]
- 	B_1 = [(0, 1), (3, 1)]
- 	B_2 = [(0, 1), (3, 1)]
- 	pi_1 = [.5, .5]
- 	pi_2 = [.5, .5]
-
- 	distr = GaussianDistribution(None)
- 	HMM_1 = HMMFromMatrices(Float(), distr, A_1, B_1, pi_1, "HMM_1")
-  	HMM_2 = HMMFromMatrices(Float(), distr, A_2, B_2, pi_2, "HMM_2")
-
-  	insample_1 = HMM_1.sample(n, 200, seed1)
-  	insample_2 = HMM_2.sample(n, 200, seed2)
+def make_data(As, Bs, pis, n=20, seed=0):
 	S = SequenceSet(Float(), [])
-	S.merge(insample_1)
-  	S.merge(insample_2)
 
-  	return S
+	for i in xrange(0, len(As)):
+		A = As[i]
+		B = Bs[i]
+		pi = pis[i]
+		distr = GaussianDistribution(None)
+		hmm = HMMFromMatrices(Float(), distr, A, B, pi, "HMM_%i" % i)
+		sample = hmm.sample(n, 200, seed)
+		S.merge(sample)
+
+	return S
+
+def smyth_example(n=20, seed=0):
+	As = []
+	Bs = []
+	pis = []
+
+	As.append([[.6, .4],
+		   	   [.4, .6]])
+	As.append([[.4, .6],
+ 		   	   [.6, .4]])
+ 	Bs.append([(0, 1), (3, 1)])
+ 	Bs.append([(0, 1), (3, 1)])
+ 	pis.append([.5, .5])
+ 	pis.append([.5, .5])
+
+ 	return make_data(As, Bs, pis)
+
+def three_hmm():
+ 	As = []
+	Bs = []
+	pis = []
+
+	As.append([[.6, .4],
+		   	   [.4, .6]])
+	As.append([[.4, .6],
+ 		   	   [.6, .4]])
+	As.append([[.2, .8],
+ 		   	   [.8, .2]])
+ 	Bs.append([(0, 1), (3, 1)])
+ 	Bs.append([(0, 1), (3, 1)])
+ 	Bs.append([(0, 1), (3, 1)])
+ 	pis.append([.5, .5])
+ 	pis.append([.5, .5])
+ 	pis.append([.5, .5])
+
+ 	return make_data(As, Bs, pis)
+
