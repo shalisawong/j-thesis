@@ -1,7 +1,13 @@
+"""
+Compare a raw Tor log to the corresponding one produced by loghacktor.py.
+Verify that all timing info is the same, circuit ids are identical, and
+anonymized ip addresses have been mapped in a consistent manner.
+"""
+
 import autotor, loghacktor
 
-exit5log = autotor.MultiLogFile("/home/japplebaum/Thesis/loganalyze/exit5.log")
-exit5loght = autotor.MultiLogFile("/home/japplebaum/Thesis/loganalyze/exit5ht.log")
+exit5log = autotor.MultiLogFile("/home/japplebaum/Thesis/loganalyze/logs/exit5.log")
+exit5loght = autotor.MultiLogFile("/home/japplebaum/Thesis/loganalyze/logs/exit5ht-2.log")
 
 assert len(exit5log.circs) == len(exit5loght.circs)
 ip_map = {}
@@ -27,3 +33,8 @@ for k in exit5log.circs.keys():
 		ip_map[orig_dst] = e5htcirc['dst_addr']
 	else:
 		assert ip_map[orig_dst] == e5htcirc['dst_addr']
+
+
+# cell rate: 152981 cells/second
+# data rate: 74399 KB/s
+# total time: 8 seconds

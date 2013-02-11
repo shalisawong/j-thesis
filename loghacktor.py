@@ -1,63 +1,50 @@
 #!/usr/bin/python2.6
 
 """
-Filter Tor log output. hack_tor statements are directed to user-specified file,
-while everything else is pushed to stdout. IP addresses in hack_tor statements
-are anonymized. Takes 1 argument - the path of the file to write hack_tor output
-to.
+Filter Tor log output. hack_tor statements are directed to a user-specified file,
+while everything else is echoed to stdout. IP addresses in hack_tor statements are
+anonymized. Takes 1 argument - the path of the file to write hack_tor output to.
 """
 
-import sys, re
+import sys
 
-def b8(n, i):
+class SlugMap(dict):
 	"""
-	Get the ith 8 bit integer, starting from bit 0, of n
+	A dict that generates new anonymized slugs when a mapping isn't present.
 	"""
-	n8 = 0
+	def __init__(self, *args, **kwargs):
+		super(dict, self).__init__(*args, **kwargs)
+		self.slug = 0
 
-	for j in xrange(0, i+1):
-		for k in xrange(0, 8):
-			if j == i: n8 += 2**k * (n % 2)
-			n /= 2
+	def __missing__(self, key):
+		slug = self.slug
+		self.slug += 1
+		self[key] = slug
+		return slug
 
-	return n8
+ip_map = SlugMap()
 
-class Ipv4Generator(object):
-	"""
-	Generate ascending IPv4 addresses.
-	"""
-	def __init__(self):
-		self.addr = 0
+if __name__ == "__main__":
+	flush_count = 0
 
-	def __call__(self):
-		addr_str = "%i.%i.%i.%i" % ( b8(self.addr, 3), b8(self.addr, 2),
-									 b8(self.addr, 1), b8(self.addr, 0) )
-		self.addr += 1
-		return addr_str
-
-next_addr = Ipv4Generator()
-ip_map = {}
-ip_re = re.compile("([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})")
-
-if __name__ == "main":
 	with open(sys.argv[1], 'w') as logfile:
 		while True:
 			line = sys.stdin.readline()
-			if line == "": exit()
+			flush_count += 1
 
-			if line.find("RRC") != -1:
-				n_addr_match = ip_re.search(line)
-				n_addr = n_addr_match.group(1)
-
-				p_addr_match = ip_re.search(line[n_addr_match.end(1):-1])
-				p_addr = p_addr_match.group(1)
-
-				n_addr2 = ip_map.get(n_addr) or next_addr()
-				p_addr2 = ip_map.get(p_addr) or next_addr()
-
-				ip_map[n_addr] = n_addr2
-				ip_map[p_addr] = p_addr2
-				line = line.replace(n_addr, n_addr2).replace(p_addr, p_addr2)
-				logfile.write(line)
+			if line[29:32] == "RRC":
+				split = line.split(" ")
+				n_addr = split[5]
+				p_addr = split[7]
+				n_addr2 = ip_map[n_addr]
+				p_addr2 = ip_map[p_addr]
+				split[5] = str(n_addr2)
+				split[7] = str(p_addr2)
+				logfile.write(" ".join(split))
 			else:
 				print line,
+
+			if flush_count > 1024:
+				sys.stdout.flush()
+				logfile.flush()
+				flush_count = 0
