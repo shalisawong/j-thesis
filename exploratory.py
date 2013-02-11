@@ -32,8 +32,7 @@ def summarize(values, name):
 	print "Skewness:", skew(values)
 	print "*" * border_len, "\n"
 
-mf = MultiLogFile("/Users/julianapplebaum/Documents/Wesleyan/Thesis/"+
-				  "data/clientlog-2013-02-05.log", DIR_OUT)
+mf = MultiLogFile("logs/sampled/clientlog-2013-02-05.log", DIR_OUT)
 
 n_circs_total = 0
 n_zero_len_circs = 0

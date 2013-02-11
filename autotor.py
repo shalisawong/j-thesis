@@ -260,15 +260,16 @@ def lf_set_times_out(logfile):
 # a class for extracting data from hack_tor logfiles where there are
 # multiple streams and multiple circuits. (hack_tor v2, needs updating)
 class MultiLogFile(object):
-    def __init__(self,filename):
+    def __init__(self,filename, direction=DIR_OUT):
         self.circs = {}
         f = open(filename,'r')
         lf = LogFile()
         i = 0;
+        dir_str =  "I" if direction == DIR_IN else "O"
         for line in f:
             i += 1
             if i % 50000 == 0: print i
-            if line[29:32] == 'RRC':
+            if line[29:33] == 'RRC' + dir_str:
                 split = line.split(' ')
                 time = ' '.join(split[0:3])
                 src_addr,dst_addr = split[5],split[7]
