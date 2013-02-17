@@ -4,20 +4,21 @@ Verify that all timing info is the same, circuit ids are identical, and
 anonymized ip addresses have been mapped in a consistent manner.
 """
 
-import autotor, loghacktor
+import autotor
+import sys
 
-exit5log = autotor.MultiLogFile("/home/japplebaum/Thesis/loganalyze/logs/exit5.log")
-exit5loght = autotor.MultiLogFile("/home/japplebaum/Thesis/loganalyze/logs/exit5ht-2.log")
+log_orig = autotor.MultiLogFile(sys.argv[1])
+log_ht = autotor.MultiLogFile(sys.argv[2])
 
-assert len(exit5log.circs) == len(exit5loght.circs)
+assert len(log_orig.circs) == len(log_ht.circs)
 ip_map = {}
 
 # For each circuit, first check that everything aside from the IP addresses
 # is identical. Then, check that the anonymized IP addresses remain consistent.
-for k in exit5log.circs.keys():
-	assert k in exit5log.circs
-	assert k in exit5loght.circs
-	e5circ, e5htcirc = exit5log.circs[k], exit5loght.circs[k]
+for k in log_orig.circs.keys():
+	assert k in log_orig.circs
+	assert k in log_ht.circs
+	e5circ, e5htcirc = log_orig.circs[k], log_ht.circs[k]
 	assert e5circ['times'] == e5htcirc['times']
 	assert e5circ['src_circ'] == e5htcirc['src_circ']
 	assert e5circ['src_circ'] == e5htcirc['src_circ']
