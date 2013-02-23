@@ -4,36 +4,8 @@ from math import isnan
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, LinearSegmentedColormap
 from matplotlib import cm
+from pprint import pprint
 import sys, json
-
-# provides some operations on lists convenient for doing time series analysis
-class TimeSeries(object):
-    def __init__(self,data=[],prune=0):
-        # prune lets us get rid of any extraneous values
-        self.times = data[prune:]
-    # divide into buckets so we can do levine correlation
-    # bucket size is in milliseconds
-    def bucketize(self,bucket_size=1000,adj=True):
-        adj_times = [t - self.times[0] for t in self.times]
-        bucketized = [t/bucket_size for t in adj_times]
-        buckets = sorted(bucketized)
-        ts = []
-        i = 0
-        for b in range(buckets[-1]+1):
-            ts.append(0)
-            while i < len(buckets) and b == buckets[i]:
-                i += 1
-                ts[b] += 1
-        if adj:
-            return ts
-        else:
-            return ([0] * int((self.times[0]-1266390000000)/bucket_size)) + ts
-    def intervals(self):
-        return [self.times[i] - self.times[i-1] for i in range(1,len(self.times))]
-    def total_time(self):
-        return self.times[-1] - self.times[0]
-    def __len__(self):
-        return len(self.times)
 
 cdict = {'red': ((0., 1, 1),
                  (0.05, 1, 1),
@@ -57,12 +29,53 @@ cdict = {'red': ((0., 1, 1),
 
 my_cmap = LinearSegmentedColormap('my_colormap', cdict, 256)
 
+def bucketize(record, bucket_size):
+	start = record['create']
+	end = record['destroy']
+	relays = record['relays']
+	circ_len = end - start
+	adj_times = [t - start for t in relays]
+	first_relay = adj_times[0]
+	last_relay = adj_times[-1]
+	bucketed = []
+	window_end = bucket_size
+
+	# pad with 0 buckets until we see relay cells
+	while window_end < first_relay:
+		bucketed.append(0)
+		window_end += bucket_size
+
+	n_cells = 0
+	cur_time = 0
+
+	# bucketize relay cells
+	for cur_time in adj_times:
+		if cur_time <= window_end:
+			n_cells += 1
+		else:
+			bucketed.append(n_cells)
+			window_end += bucket_size
+			n_cells = 1
+
+	# special case if all relay cells occur before our first window end
+	if cur_time < window_end:
+		bucketed.append(n_cells)
+
+	# pad with 0 buckets until we reach the end of the series
+	# while window_end < end:
+	# 	bucketed.append(0)
+	# 	window_end += bucket_size
+
+	if len(bucketed) == 0:
+		pprint(adj_times)
+		print circ_len/1000
+		exit()
+
+	return bucketed
+
 def autocorrelate(values, lag=1):
 	shifted = values[0:len(values)-1-lag]
 	values_cutoff = values[lag:len(values)-1]
-	# print values
-	# print shifted
-	# print values_cutoff
 	return pearsonr(values_cutoff, shifted)
 
 def topNLags(values, n):
@@ -99,14 +112,13 @@ graphing_mode = sys.argv[1]
 filepath = sys.argv[2]
 bucket_size = int(sys.argv[3])
 censor = None
-if len(sys.argv) > 4:
-	censor = int(sys.argv[4])
+if len(sys.argv) > 5:
+	censor = int(sys.argv[5])
 
 with open(filepath) as data_file:
 	circuits = json.load(data_file)
 
 	n_circs_total = 0
-	n_zero_len_circs = 0
 	chosen_series = []
 
 	# lists of descriptive statistics for individual series
@@ -123,26 +135,22 @@ with open(filepath) as data_file:
 
 	for circ in circuits:
 		n_circs_total += 1
-		time_series = TimeSeries(circ)
-		bucketized = time_series.bucketize(bucket_size=bucket_size)
-		circ_len = time_series.total_time()/bucket_size
+		bucketized = bucketize(circ, bucket_size)
+		circ_len = 1.0*(circ['destroy'] - circ['create'])
 
-		if circ_len == 0:
-			n_zero_len_circs += 1
-		else:
+		if len(bucketized) > 0:
 			if graphing_mode == '-summarize':
-				circ_len_aggr.append(circ_len)
-				mean_cells_per_second_aggr.append(1.0*len(time_series.times)/
-												  circ_len)
+				circ_len_aggr.append(circ_len/1000)
+				mean_cells_per_second_aggr.append(1.0*sum(bucketized)/circ_len)
 				min_cells_per_second_aggr.append(min(bucketized))
 				max_cells_per_second_aggr.append(max(bucketized))
 				stddev_cells_per_second_aggr.append(std(bucketized))
-				top_lags = topNLags(bucketized, 3)
+				# top_lags = topNLags(bucketized, 3)
 
-				if len(top_lags) == 3:
-					optimal1_lag_aggr.append(top_lags[0])
-					optimal2_lag_aggr.append(top_lags[1])
-					optimal3_lag_aggr.append(top_lags[2])
+				# if len(top_lags) == 3:
+				# 	optimal1_lag_aggr.append(top_lags[0])
+				# 	optimal2_lag_aggr.append(top_lags[1])
+				# 	optimal3_lag_aggr.append(top_lags[2])
 
 			for sample in bucketized:
 				all_cells_per_second.append(sample)
@@ -152,36 +160,35 @@ with open(filepath) as data_file:
 	chosen_series.sort(cmp=seq_cmp)
 	n_chosen = len(chosen_series)
 	print n_circs_total, "circuits total"
-	print n_zero_len_circs, "0 second circuits"
-	print n_chosen, "time series selected for analysis"
+	# print n_chosen, "time series selected for analysis"
 
 	if graphing_mode == '-summarize':
 		summarize(mean_cells_per_second_aggr, "Mean Cells/Second")
 		summarize(circ_len_aggr, "Circuit Length (seconds)")
 
-		lenplot = plt.subplot(321)
+		lenplot = plt.subplot(311)
 		plt.title("Circuit Time Frequencies")
 		lenplot.hist(circ_len_aggr, bins=100)
 
-		meansplot = plt.subplot(322)
+		meansplot = plt.subplot(312)
 		plt.title("Mean Cell/Second Frequencies")
 		meansplot.hist(max_cells_per_second_aggr, bins=100)
 
-		cellsplot = plt.subplot(323)
+		cellsplot = plt.subplot(313)
 		plt.title("Instantaneous Cells/Second Frequencies")
-		cellsplot.hist(all_cells_per_second, bins=20)
+		cellsplot.hist(all_cells_per_second, bins=100)
 
-		lagsplot1 = plt.subplot(324)
-		plt.title("Optimal Lag Frequencies")
-		lagsplot1.hist(optimal1_lag_aggr, bins=200)
+		# lagsplot1 = plt.subplot(324)
+		# plt.title("Optimal Lag Frequencies")
+		# lagsplot1.hist(optimal1_lag_aggr, bins=200)
 
-		lagsplot2 = plt.subplot(325)
-		plt.title("2nd Best Lag Frequencies")
-		lagsplot2.hist(optimal2_lag_aggr, bins=200)
+		# lagsplot2 = plt.subplot(325)
+		# plt.title("2nd Best Lag Frequencies")
+		# lagsplot2.hist(optimal2_lag_aggr, bins=200)
 
-		lagsplot3 = plt.subplot(326)
-		plt.title("3rd Best Lag Frequencies")
-		lagsplot3.hist(optimal3_lag_aggr, bins=200)
+		# lagsplot3 = plt.subplot(326)
+		# plt.title("3rd Best Lag Frequencies")
+		# lagsplot3.hist(optimal3_lag_aggr, bins=200)
 
 	elif graphing_mode == '-timeplots':
 		plt.title("Time Plots (n=%i)" % n_chosen)
