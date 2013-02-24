@@ -1,7 +1,7 @@
 from datetime import datetime
 import sys, json
 
-# takes a time string and returns the number of milliseconds since the epoch
+# takes a time string and returns the number of milliseconds since January
 def parse_time(time_str):
     augmented = '2013 ' + time_str
     date_parsed = datetime.strptime(augmented[0:-4],'%Y %b %d %H:%M:%S')
@@ -53,7 +53,6 @@ with open(lfpath) as logfile:
 					'destroy': destroy_time
 				}
 
-
 	logfile.seek(0)
 
 	# second pass - build time series for complete circuits
@@ -63,7 +62,6 @@ with open(lfpath) as logfile:
 			series = time_series.get(record['ident'])
 			if series is not None:
 				series['relays'].append(record['time'])
-
 
 	n_incomplete = len(create_times) - len(time_series)
 

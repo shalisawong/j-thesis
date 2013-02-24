@@ -4,6 +4,7 @@ from math import isnan
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, LinearSegmentedColormap
 from matplotlib import cm
+from sklearn.cluster import k_means
 from pprint import pprint
 import sys, json
 
@@ -58,7 +59,7 @@ def bucketize(record, bucket_size):
 			n_cells = 1
 
 	# special case if all relay cells occur before our first window end
-	if cur_time < window_end:
+	if cur_time <= window_end:
 		bucketed.append(n_cells)
 
 	# pad with 0 buckets until we reach the end of the series
@@ -112,8 +113,16 @@ graphing_mode = sys.argv[1]
 filepath = sys.argv[2]
 bucket_size = int(sys.argv[3])
 censor = None
-if len(sys.argv) > 5:
-	censor = int(sys.argv[5])
+discretize = False
+n_bins = 0
+use_labels = False
+if len(sys.argv) > 4:
+	if sys.argv[4] == "-discretize":
+		discretize = True
+		n_bins = int(sys.argv[5])
+		use_labels = sys.argv[6] == "-uselabels"
+	else:
+		censor = int(sys.argv[4])
 
 with open(filepath) as data_file:
 	circuits = json.load(data_file)
@@ -133,7 +142,8 @@ with open(filepath) as data_file:
 	optimal3_lag_aggr = []
 	all_cells_per_second = []
 
-	for circ in circuits:
+	print "Reading circuit data..."
+	for circ in circuits:#[133:135]:
 		n_circs_total += 1
 		bucketized = bucketize(circ, bucket_size)
 		circ_len = 1.0*(circ['destroy'] - circ['create'])
@@ -157,10 +167,30 @@ with open(filepath) as data_file:
 
 			chosen_series.append(bucketized)
 
-	chosen_series.sort(cmp=seq_cmp)
 	n_chosen = len(chosen_series)
 	print n_circs_total, "circuits total"
-	# print n_chosen, "time series selected for analysis"
+
+	# Cluster the observations into k groups, then replace every value
+	# with its corresponding centroid
+	if discretize:
+		vectorized = [[o] for o in all_cells_per_second]
+		print "Clustering observations into discrete bins..."
+		centroids, labels, inertia = k_means(vectorized, n_bins)
+		idx = 0
+		for circ in chosen_series:
+			for i in xrange(0, len(circ)):
+				label = labels[idx]
+				centroid = centroids[label]
+
+				if use_labels:
+					circ[i] = label
+					print label
+				else:
+					circ[i] = centroid
+
+				idx += 1
+
+	chosen_series.sort(cmp=seq_cmp)
 
 	if graphing_mode == '-summarize':
 		summarize(mean_cells_per_second_aggr, "Mean Cells/Second")
@@ -168,14 +198,20 @@ with open(filepath) as data_file:
 
 		lenplot = plt.subplot(311)
 		plt.title("Circuit Time Frequencies")
+		plt.xlabel("Circuit Time (seconds)")
+		plt.ylabel("Number of Occurences")
 		lenplot.hist(circ_len_aggr, bins=100)
 
 		meansplot = plt.subplot(312)
 		plt.title("Mean Cell/Second Frequencies")
+		plt.xlabel("Mean Cells/Second")
+		plt.ylabel("Number of Occurences")
 		meansplot.hist(max_cells_per_second_aggr, bins=100)
 
 		cellsplot = plt.subplot(313)
-		plt.title("Instantaneous Cells/Second Frequencies")
+		plt.title("Instantaneous Cells/%ims Frequencies" % bucket_size)
+		plt.xlabel("Instantaneous Cells/%ims" % bucket_size)
+		plt.ylabel("Number of Occurences")
 		cellsplot.hist(all_cells_per_second, bins=100)
 
 		# lagsplot1 = plt.subplot(324)
@@ -195,6 +231,8 @@ with open(filepath) as data_file:
 		plt.grid(True)
 
 		for series in chosen_series:
+			# append a 0 to avoid strange fill shapes
+			series.append(0)
 			plt.fill(series, alpha=.1, color='red')
 	elif graphing_mode == '-colorplots':
 		n = 1
