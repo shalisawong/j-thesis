@@ -3,3 +3,4 @@
 *.json
 *.gz
 .DS_Store
+logs/parsed/*

@@ -4,29 +4,17 @@ from math import isnan
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, LinearSegmentedColormap
 from matplotlib import cm
+from pylab import get_cmap
 from sklearn.cluster import k_means
 from pprint import pprint
 import sys, json
 
-cdict = {'red': ((0., 1, 1),
-                 (0.05, 1, 1),
-                 (0.11, 0, 0),
-                 (0.66, 1, 1),
-                 (0.89, 1, 1),
-                 (1, 0.5, 0.5)),
-         'green': ((0., 1, 1),
-                   (0.05, 1, 1),
-                   (0.11, 0, 0),
-                   (0.375, 1, 1),
-                   (0.64, 1, 1),
-                   (0.91, 0, 0),
-                   (1, 0, 0)),
-         'blue': ((0., 1, 1),
-                  (0.05, 1, 1),
-                  (0.11, 1, 1),
-                  (0.34, 1, 1),
-                  (0.65, 0, 0),
-                  (1, 0, 0))}
+cdict = {'red': 	((0, 0, 0),
+                 	 (1, 1, 1)),
+         'green': 	((0, 0, 0),
+                 	 (1, 1, 1)),
+         'blue': 	((0, 0, 0),
+                 	 (1, 1, 1))}
 
 my_cmap = LinearSegmentedColormap('my_colormap', cdict, 256)
 
@@ -38,39 +26,23 @@ def bucketize(record, bucket_size):
 	adj_times = [t - start for t in relays]
 	first_relay = adj_times[0]
 	last_relay = adj_times[-1]
-	bucketed = []
+	n_buckets = max(1, int(round(circ_len/bucket_size + .5)))
+	bucketed = [0] * n_buckets # fill all buckets with 0 to start
+
+	bucket_idx = 0
 	window_end = bucket_size
 
-	# pad with 0 buckets until we see relay cells
-	while window_end < first_relay:
-		bucketed.append(0)
-		window_end += bucket_size
-
-	n_cells = 0
-	cur_time = 0
-
-	# bucketize relay cells
-	for cur_time in adj_times:
-		if cur_time <= window_end:
-			n_cells += 1
-		else:
-			bucketed.append(n_cells)
+	# fill buckets with relay cell counts
+	for time in adj_times:
+		if time < 0:
+			raise ValueError("!!! Circuit %s had RELAY before CREATE" % record['ident'])
+		elif time > circ_len:
+			raise ValueError("!!! Circuit %s had RELAY after DESTROY" % record['ident'])
+		if time > window_end:
+			bucket_idx += 1
 			window_end += bucket_size
-			n_cells = 1
 
-	# special case if all relay cells occur before our first window end
-	if cur_time <= window_end:
-		bucketed.append(n_cells)
-
-	# pad with 0 buckets until we reach the end of the series
-	# while window_end < end:
-	# 	bucketed.append(0)
-	# 	window_end += bucket_size
-
-	if len(bucketed) == 0:
-		pprint(adj_times)
-		print circ_len/1000
-		exit()
+		bucketed[bucket_idx] += 1
 
 	return bucketed
 
@@ -79,16 +51,14 @@ def autocorrelate(values, lag=1):
 	values_cutoff = values[lag:len(values)-1]
 	return pearsonr(values_cutoff, shifted)
 
-def topNLags(values, n):
-	optimal = 1
-	lags_map = {}
-	for lag in xrange(1, len(values)/4):
-		corr = autocorrelate(values, lag)
-		lags_map[corr] = lag
+def avg_autocorr(values):
+	avg = 0
 
-	corrs_sorted = sorted(lags_map.keys(), reverse=True)
-	n_corrs = min(len(corrs_sorted), n)
-	return [lags_map[corrs_sorted[i]] for i in xrange(0, n_corrs)]
+	for lag in xrange(1, len(values)/4):
+		corr = autocorrelate(values, lag)[0]
+		avg += corr/len(values)
+
+	return avg
 
 def summarize(values, name):
 	border_len = len(name) + 8
@@ -143,9 +113,14 @@ with open(filepath) as data_file:
 	all_cells_per_second = []
 
 	print "Reading circuit data..."
-	for circ in circuits:#[133:135]:
+	for circ in circuits:
+		try:
+			bucketized = bucketize(circ, bucket_size)
+		except ValueError, e:
+			print e
+			continue
+
 		n_circs_total += 1
-		bucketized = bucketize(circ, bucket_size)
 		circ_len = 1.0*(circ['destroy'] - circ['create'])
 
 		if len(bucketized) > 0:
@@ -155,13 +130,6 @@ with open(filepath) as data_file:
 				min_cells_per_second_aggr.append(min(bucketized))
 				max_cells_per_second_aggr.append(max(bucketized))
 				stddev_cells_per_second_aggr.append(std(bucketized))
-				# top_lags = topNLags(bucketized, 3)
-
-				# if len(top_lags) == 3:
-				# 	optimal1_lag_aggr.append(top_lags[0])
-				# 	optimal2_lag_aggr.append(top_lags[1])
-				# 	optimal3_lag_aggr.append(top_lags[2])
-
 			for sample in bucketized:
 				all_cells_per_second.append(sample)
 
@@ -176,15 +144,17 @@ with open(filepath) as data_file:
 		vectorized = [[o] for o in all_cells_per_second]
 		print "Clustering observations into discrete bins..."
 		centroids, labels, inertia = k_means(vectorized, n_bins)
+		print centroids
+		print len(labels)
+		# exit()
 		idx = 0
 		for circ in chosen_series:
 			for i in xrange(0, len(circ)):
 				label = labels[idx]
-				centroid = centroids[label]
+				centroid = centroids[label][0]
 
 				if use_labels:
 					circ[i] = label
-					print label
 				else:
 					circ[i] = centroid
 
@@ -213,39 +183,35 @@ with open(filepath) as data_file:
 		plt.xlabel("Instantaneous Cells/%ims" % bucket_size)
 		plt.ylabel("Number of Occurences")
 		cellsplot.hist(all_cells_per_second, bins=100)
-
-		# lagsplot1 = plt.subplot(324)
-		# plt.title("Optimal Lag Frequencies")
-		# lagsplot1.hist(optimal1_lag_aggr, bins=200)
-
-		# lagsplot2 = plt.subplot(325)
-		# plt.title("2nd Best Lag Frequencies")
-		# lagsplot2.hist(optimal2_lag_aggr, bins=200)
-
-		# lagsplot3 = plt.subplot(326)
-		# plt.title("3rd Best Lag Frequencies")
-		# lagsplot3.hist(optimal3_lag_aggr, bins=200)
-
 	elif graphing_mode == '-timeplots':
-		plt.title("Time Plots (n=%i)" % n_chosen)
+		plt.title("Horizon Chart (n=%i)" % n_chosen)
 		plt.grid(True)
 
 		for series in chosen_series:
 			# append a 0 to avoid strange fill shapes
-			series.append(0)
-			plt.fill(series, alpha=.1, color='red')
+			plt.fill_between(range(0, len(series)), series, [0]*len(series),
+				alpha=.1, color='black', edgecolor='none')
 	elif graphing_mode == '-colorplots':
 		n = 1
-		vmin = 0
-		vmax = censor or max(all_cells_per_second)
+
+		if not use_labels:
+			vmin = 0
+			vmax = censor or max(all_cells_per_second)
+		else:
+			vmin = 0
+			vmax = n_bins
 
 		fig = plt.figure()
 		ax = fig.add_subplot(111)
-		ax.patch.set_facecolor('black')
+		ax.patch.set_facecolor('grey')
+
+		plt.title("Color Plots")
+		plt.xlabel("")
 
 		for series in chosen_series:
 			scat = ax.scatter(range(0, len(series)), [n]*len(series),
-				c=series, marker="s", edgecolors='none', vmin=vmin, vmax=vmax)
+				c=series, marker="s", edgecolors='none', vmin=vmin, vmax=vmax,
+				cmap=my_cmap)
 			n += 1
 
 			if n == len(chosen_series)-1:
@@ -272,12 +238,12 @@ with open(filepath) as data_file:
 
 			if len(lags) > 0:
 				scat = ax.scatter(lags, [i]*len(lags), c=correlations, marker="s",
-					edgecolors='none', vmin=vmin, vmax=vmax)
+					edgecolors='none', vmin=vmin, vmax=vmax, cmap=my_cmap)
 				i += 1
 				if not did_bar:
 					plt.colorbar(scat)
 					did_bar = True
 	else:
-		print "ERROR: No graphing mode selected"
+		print "ERROR: Invalid graphing mode selected"
 
 	plt.show()

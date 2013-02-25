@@ -7,6 +7,7 @@ def parse_time(time_str):
     date_parsed = datetime.strptime(augmented[0:-4],'%Y %b %d %H:%M:%S')
     n_seconds = 1.0*(date_parsed - datetime(2013, 1, 1)).total_seconds()
     n_milliseconds = int(time_str[-3:])
+    print date_parsed
     return 1000*n_seconds + n_milliseconds
 
 def parse_line(line):
@@ -33,6 +34,7 @@ with open(lfpath) as logfile:
 	print "Parsing..."
 	# first pass - determine which circuits are complete
 	for line in logfile:
+		# print "%i circuits so far" % (len(time_series) + 1)
 		if line[29:35] == "CREATE":
 			record = parse_line(line)
 			ident = record['ident']
@@ -50,12 +52,14 @@ with open(lfpath) as logfile:
 				time_series[ident] = {
 					'create': create_time,
 					'relays': [],
-					'destroy': destroy_time
+					'destroy': destroy_time,
+					'ident': ident
 				}
 
 	logfile.seek(0)
 
 	# second pass - build time series for complete circuits
+	print "Adding relay timing data..."
 	for line in logfile:
 		if line[29:33] == "RRC" + direc:
 			record = parse_line(line)
@@ -66,6 +70,7 @@ with open(lfpath) as logfile:
 	n_incomplete = len(create_times) - len(time_series)
 
 	# third pass - delete circuits with no relay cells
+	print "Removing circuits with no relay cells"
 	for ident, record in time_series.iteritems():
 		if len(record['relays']) == 0:
 			zero_circ_ids.append(ident)
