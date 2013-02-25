@@ -7,7 +7,7 @@ from matplotlib import cm
 from pylab import get_cmap
 from sklearn.cluster import k_means
 from pprint import pprint
-import sys, json
+import sys, json, subprocess
 
 cdict = {'red': 	((0, 0, 0),
                  	 (1, 1, 1)),
@@ -17,6 +17,26 @@ cdict = {'red': 	((0, 0, 0),
                  	 (1, 1, 1))}
 
 my_cmap = LinearSegmentedColormap('my_colormap', cdict, 256)
+artist_ident_map = {}
+graphing_mode = sys.argv[1]
+filepath = sys.argv[2]
+bucket_size = int(sys.argv[3])
+ts_ident = None
+censor = None
+discretize = False
+n_bins = 0
+use_labels = False
+
+class IdentList(list):
+	def __init__(self, ident):
+		super(list, self).__init__()
+		self.ident = ident
+
+def onpick(event):
+	ident = artist_ident_map[event.artist]
+	print "Loading time series for circuit %s" % ident
+	bash_call = "python exploratory.py -timeplot %s 1000 %i,%i" % (filepath, ident[0], ident[1])
+	subprocess.call(bash_call, shell=True)
 
 def bucketize(record, bucket_size):
 	start = record['create']
@@ -27,7 +47,11 @@ def bucketize(record, bucket_size):
 	first_relay = adj_times[0]
 	last_relay = adj_times[-1]
 	n_buckets = max(1, int(round(circ_len/bucket_size + .5)))
-	bucketed = [0] * n_buckets # fill all buckets with 0 to start
+	bucketed = IdentList(record['ident'])
+
+	# fill all buckets with 0 to start
+	for i in xrange(0, n_buckets):
+		bucketed.append(0)
 
 	bucket_idx = 0
 	window_end = bucket_size
@@ -72,22 +96,18 @@ def summarize(values, name):
 	print "*" * border_len, "\n"
 
 def seq_cmp(x, y):
-		if len(x) == len(y):
-			return 0
-		elif len(x) > len(y):
-			return 1
-		else:
-			return -1
+	if len(x) == len(y):
+		return 0
+	elif len(x) > len(y):
+		return 1
+	else:
+		return -1
 
-graphing_mode = sys.argv[1]
-filepath = sys.argv[2]
-bucket_size = int(sys.argv[3])
-censor = None
-discretize = False
-n_bins = 0
-use_labels = False
 if len(sys.argv) > 4:
-	if sys.argv[4] == "-discretize":
+	if graphing_mode == "-timeplot":
+		cstr, ipstr = sys.argv[4].split(",")
+		ts_ident = [int(cstr), int(ipstr)]
+	elif sys.argv[4] == "-discretize":
 		discretize = True
 		n_bins = int(sys.argv[5])
 		use_labels = sys.argv[6] == "-uselabels"
@@ -97,9 +117,6 @@ if len(sys.argv) > 4:
 with open(filepath) as data_file:
 	circuits = json.load(data_file)
 
-	n_circs_total = 0
-	chosen_series = []
-
 	# lists of descriptive statistics for individual series
 	circ_len_aggr = []
 	mean_cells_per_second_aggr = []
@@ -107,10 +124,8 @@ with open(filepath) as data_file:
 	max_cells_per_second_aggr = []
 	stddev_cells_per_second_aggr = []
 	skew_cells_per_second_agrr = []
-	optimal1_lag_aggr = []
-	optimal2_lag_aggr = []
-	optimal3_lag_aggr = []
 	all_cells_per_second = []
+	chosen_series = []
 
 	print "Reading circuit data..."
 	for circ in circuits:
@@ -120,8 +135,10 @@ with open(filepath) as data_file:
 			print e
 			continue
 
-		n_circs_total += 1
 		circ_len = 1.0*(circ['destroy'] - circ['create'])
+
+		# if max(bucketized) > 100:
+		# 	continue
 
 		if len(bucketized) > 0:
 			if graphing_mode == '-summarize':
@@ -136,7 +153,6 @@ with open(filepath) as data_file:
 			chosen_series.append(bucketized)
 
 	n_chosen = len(chosen_series)
-	print n_circs_total, "circuits total"
 
 	# Cluster the observations into k groups, then replace every value
 	# with its corresponding centroid
@@ -183,51 +199,58 @@ with open(filepath) as data_file:
 		plt.xlabel("Instantaneous Cells/%ims" % bucket_size)
 		plt.ylabel("Number of Occurences")
 		cellsplot.hist(all_cells_per_second, bins=100)
-	elif graphing_mode == '-timeplots':
+	elif graphing_mode == '-timeplot':
+		for series in chosen_series:
+			if series.ident == ts_ident:
+				plt.xlabel("Time (seconds)")
+				plt.ylabel("Outgoing Relay Cells/Second")
+				plt.fill_between(range(0, len(series)), series, [0]*len(series),
+					color='grey')
+	elif graphing_mode == '-horizon':
+		fig = plt.figure()
+		fig.canvas.mpl_connect('pick_event', onpick)
+		ax = fig.add_subplot(111)
 		plt.title("Horizon Chart (n=%i)" % n_chosen)
 		plt.grid(True)
 
 		for series in chosen_series:
-			# append a 0 to avoid strange fill shapes
-			plt.fill_between(range(0, len(series)), series, [0]*len(series),
-				alpha=.1, color='black', edgecolor='none')
+			ident = series.ident
+			artist = ax.fill_between(range(0, len(series)), series, [0]*len(series),
+				alpha=.1, color='black', edgecolor='none', picker=True)
+			artist_ident_map[artist] = ident
 	elif graphing_mode == '-colorplots':
 		n = 1
-
 		if not use_labels:
 			vmin = 0
 			vmax = censor or max(all_cells_per_second)
 		else:
 			vmin = 0
 			vmax = n_bins
-
 		fig = plt.figure()
+		fig.canvas.mpl_connect('pick_event', onpick)
 		ax = fig.add_subplot(111)
 		ax.patch.set_facecolor('grey')
-
 		plt.title("Color Plots")
-		plt.xlabel("")
-
 		for series in chosen_series:
+			ident = series.ident
 			scat = ax.scatter(range(0, len(series)), [n]*len(series),
 				c=series, marker="s", edgecolors='none', vmin=vmin, vmax=vmax,
-				cmap=my_cmap)
+				cmap=my_cmap, picker=True)
+			artist_ident_map[scat] = ident
 			n += 1
-
 			if n == len(chosen_series)-1:
 				plt.colorbar(scat)
-
 	elif graphing_mode == '-autocorrs':
 		vmin = -1
 		vmax = 1
 		i = 1
-
 		fig = plt.figure()
+		fig.canvas.mpl_connect('pick_event', onpick)
 		ax = fig.add_subplot(111)
 		ax.patch.set_facecolor('black')
 		did_bar = False
-
 		for series in chosen_series:
+			ident = series.ident
 			lags = []
 			correlations = []
 			for lag in xrange(1, len(series)/4):
@@ -235,10 +258,10 @@ with open(filepath) as data_file:
 				if not isnan(correlation):
 					lags.append(lag)
 					correlations.append(correlation)
-
 			if len(lags) > 0:
 				scat = ax.scatter(lags, [i]*len(lags), c=correlations, marker="s",
-					edgecolors='none', vmin=vmin, vmax=vmax, cmap=my_cmap)
+					edgecolors='none', vmin=vmin, vmax=vmax, cmap=my_cmap, picker=True)
+				artist_ident_map[scat] = ident
 				i += 1
 				if not did_bar:
 					plt.colorbar(scat)
