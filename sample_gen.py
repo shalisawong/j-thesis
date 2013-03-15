@@ -43,7 +43,7 @@ def three_hmm():
  		   	   [.8, .2]])
  	Bs.append([(0, 1), (3, 1)])
  	Bs.append([(0, 1), (3, 1)])
- 	Bs.append([(0, 1), (3, 1)])
+ 	Bs.append([(12, 1), (0, 1)])
  	pis.append([.5, .5])
  	pis.append([.5, .5])
  	pis.append([.5, .5])

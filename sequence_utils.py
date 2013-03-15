@@ -17,3 +17,26 @@ def toSequenceSet(S):
 def toSequence(S):
 	return EmissionSequence(Float(), list(S))
 
+def clustersToLists(sequenceSet):
+	clusters = []
+	for seqSet in sequenceSet:
+		cluster = []
+		for seq in seqSet:
+			cluster.append({'relays': list(seq), 'ident': None})
+		clusters.append(cluster)
+
+	return clusters
+
+def seqSetToList(sequenceSet):
+	seqs = []
+	for seq in sequenceSet:
+		seqs.append(list(seq))
+	return seqs
+
+def flattenedClusters(sequenceSet):
+	clusters = clustersToLists(sequenceSet)
+	flattened = []
+	for clust in clusters:
+		for seq in clust:
+			flattened.append(seq)
+	return flattened
