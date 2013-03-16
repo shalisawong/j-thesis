@@ -7,9 +7,10 @@ only supports time series data with 1-dimensional observations.
 
 from ghmm import Float, GaussianDistribution, HMMFromMatrices, SequenceSet
 from sklearn.cluster import k_means
+from sklearn.metrics.pairwise import pairwise_distances
 from numpy import std, mean, array
 from numpy import float as npfloat
-from numpy import std
+from scipy.spatial.distance import squareform
 from sample_gen import smyth_example, three_hmm
 from matrix_utils import uniformMatrix
 from cluster_utils import clusterFromDMatrix
@@ -71,12 +72,26 @@ def hmmFromDistr(B):
 	pi = [1.0/m] * m
 	return HMMFromMatrices(Float(), distr, A, B, pi)
 
-def train_hmm(pair):
+def symDistance(items):
+	pair1, pair2 = items
+	cluster1, distr1 = pair1
+	cluster2, distr2 = pair2
+	hmm1 = hmmFromDistr(distr1)
+	hmm2 = hmmFromDistr(distr2)
+	s1_m2 = hmm2.loglikelihood(toSequenceSet(cluster1))
+	s2_m1 = hmm1.loglikelihood(toSequenceSet(cluster2))
+	sym = (s1_m2 + s2_m1)/2.0
+	return min(-1 * sym, MAX_DIST)
+
+def trainHMM(pair):
 	cluster, m = pair
 	seqSet = toSequenceSet(cluster)
 	hmm = getDefaultHMM(pair)
 	hmm.baumWelch(seqSet)
 	return str(hmm)
+
+def seqModelPair(pair):
+	return (pair[0], getEmissionDistribution(pair))
 
 class HMMCluster():
 	def __init__(self, m, k):
@@ -92,36 +107,29 @@ class HMMCluster():
 		pool = Pool()
 		N = len(S)
 		print "Generating default HMMs (parallel)..."
-		emmision_distrs = pool.map(getEmissionDistribution, [([s], self.m) for s in S])
-		hmms = map(hmmFromDistr, emmision_distrs)
-		dmatrix = uniformMatrix(len(S), len(S))
-		max_l = float('-inf')
-		seqSet = toSequenceSet(S)
+		seqmodel_pairs = pool.map(seqModelPair, [([s], self.m) for s in S])
+		dist_pairs = []
+		print "Computing distance matrix (parallel)..."
+		for r in xrange(0, N):
+			for c in xrange(1+r, N):
+				dist_pairs.append((seqmodel_pairs[r], seqmodel_pairs[c]))
+		condensed = pool.map(symDistance, dist_pairs)
+		square = squareform(condensed)
+		for c in xrange(0, N):
+			for r in xrange(1+c, N):
+				square[r][c] = 0
 
-		print "Building distance matrix..."
-		for j in xrange(0, N):
-			for i in xrange(0, N):
-				if (j > i):
-					dmatrix[j][i] = 0
-				else:
-					si_mj = hmms[j].loglikelihood(seqSet[i])
-					sj_mi = hmms[i].loglikelihood(seqSet[j])
-					assert not isnan(si_mj)
-					assert not isnan(sj_mi)
-					sym = (si_mj + sj_mi)/2.0
-					max_l = max(max_l, sym)
-					dmatrix[j][i] = min(-1 * sym, MAX_DIST)
+		print square
 
-		print "Hierarchical clustering..."
-		clusters = clusterFromDMatrix(S, self.k, dmatrix)
-		print "Default HMMs for clusters..."
-		print "Baum Welch reestimation (parallel)..."
-		trained_hmms = pool.map(train_hmm, zip(clusters, [self.m]*len(clusters)))
+		print "Hierarchical clustering (serial)..."
+		clusters = clusterFromDMatrix(S, self.k, square)
+		print "Training HMMs on clusters (parallel)..."
+		trained_hmms = pool.map(trainHMM, zip(clusters, [self.m]*len(clusters)))
 		self.model = trained_hmms
 		self.clusters = clusters
 
 	def score(self, S_test):
-		return self.model.loglikelihood(toSequenceSet(S_test))
+		return self.model.loglikelihood(seqSetToListequenceSet(S_test))
 
 	def get_params(self, deep):
 		return { 'm': self.m, 'k': self.k }
@@ -130,19 +138,21 @@ class HMMCluster():
 		self.m = params['m']
 		self.k = params['k']
 
-# Run the experiment Smyth details
 if __name__ == "__main__":
 	inpath = sys.argv[1]
-	outpath = sys.argv[2]
-	with open(inpath) as datafile:
-		with open(outpath, 'w') as clustfile:
+	m = int(sys.argv[2])
+	k = int(sys.argv[3])
+	if inpath == "-smythex":
+		print "Generating synthetic data..."
+		sequences = seqSetToList(smyth_example(n=20))
+	else:
+		with open(inpath) as datafile:
 			print "Loading data..."
 			circuits = json.load(datafile)
-			m = 6
-			k = 4
-			sequences = [circ['relays'] for circ in circuits]
-			print "Clustering..."
-			clust = HMMCluster(m, k)
-			clust.fit(sequences)
-			pprint(clust.model)
-			json.dump(clustersToLists(clust.clusters), clustfile)
+			sequences = [circ['relays'] for circ in circuits][:100]
+
+	print "Clustering..."
+	clust = HMMCluster(m, k)
+	clust.fit(sequences)
+	for hmm in clust.model:
+		print hmm

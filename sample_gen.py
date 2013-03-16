@@ -28,7 +28,7 @@ def smyth_example(n=20, seed=0):
  	pis.append([.5, .5])
  	pis.append([.5, .5])
 
- 	return make_data(As, Bs, pis)
+ 	return make_data(As, Bs, pis, n, seed)
 
 def three_hmm():
  	As = []
