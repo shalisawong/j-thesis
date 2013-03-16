@@ -1,7 +1,7 @@
 from datetime import datetime
 import sys, json
 
-# takes a time string and returns the number of milliseconds since January
+# takes a time string and returns the number of milliseconds since January 1 2013
 def parse_time(time_str):
     augmented = '2013 ' + time_str
     date_parsed = datetime.strptime(augmented[0:-4],'%Y %b %d %H:%M:%S')
@@ -72,7 +72,7 @@ with open(lfpath) as logfile:
 	# third pass - delete circuits with no relay cells
 	print "Removing circuits with no relay cells"
 	for ident, record in time_series.iteritems():
-		if len(record['relays']) == 0:
+		if len(record['relays']) < 2:
 			zero_circ_ids.append(ident)
 
 	for ident in zero_circ_ids:
