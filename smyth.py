@@ -29,9 +29,16 @@ MAX_DIST = 10**9
 
 def getEmissionDistribution(pair):
 	"""
-	Partition the individual observations in S into m clusters,
-	then calculate the mean and standard deviation of each one.
-	Returns an emission distribution for use with the Gaussian HMM.
+	Given a pair (S: list of sequences, m: int), get the emission
+	distribution for Smyth's "default" HMM. m is an upper bound on the
+	number of states -- if we can only produce m' nonempty clusters (eg.
+	given a cluster of sequences likes [0, 1, 0, 1, .... 0, 1]), then the
+	distribution for a m' state HMM is returned.
+
+	@param pair: A tuple of the form (S: list of sequences, m: int)
+	@return: The corresponding emission distribution encoded as a list
+			 of (mu, stddev) pairs
+
 	"""
 	S, m = pair
 	flattened = []
@@ -57,15 +64,27 @@ def getEmissionDistribution(pair):
 	return B
 
 def getDefaultHMM(pair):
-		"""
-		Initialize a m state HMM with emission domain sigma using
-		Smyth's "default" method.
-		"""
-		cluster, m = pair
-		B = getEmissionDistribution(pair)
-		return hmmFromDistr(B)
+	"""
+	Initialize a m state Gaussian emission HMM using Smyth's "default" method.
+
+	@param pair: A tuple of the form (S: list of sequences, m: int)
+	@return: The HMM as as ghmm.GaussianEmmisionHMM.
+	"""
+	cluster, m = pair
+	B = getEmissionDistribution(pair)
+	return hmmFromDistr(B)
 
 def hmmFromDistr(B):
+	"""
+	Given an emission distribution from getEmissionDistribution, fill
+	in the A and pi matrices for the HMM. We can do this because, since
+	A and pi are both uniform, they can be determined just from the length
+	of B.
+
+	@param B: An emission distribution encoded as a list of (mu, stddev) pairs
+	@return: A ghmm.GaussianEmmisionHMM with uniform A and pi, and emission
+			 distribution B.
+	"""
 	m = len(B)
 	A = [[1.0/m] * m] * m
 	distr = GaussianDistribution(None)
@@ -73,17 +92,36 @@ def hmmFromDistr(B):
 	return HMMFromMatrices(Float(), distr, A, B, pi)
 
 def symDistance(items):
+	"""
+	Calculate Rabiner's symmetrized distance measure between two sequences
+	given their corresponding "default" models.
+
+	@param items: A tuple of the form:
+					((seq1, distr1), (seq2, distr2))
+				  where seq1 and seq2 are singleton lists of emission sequences,
+				  and distr1, distr2 are the corresponding emission distributions
+				  as computed by getEmissionDistribution
+	@return: The distance between seq1 and seq2
+	"""
 	pair1, pair2 = items
-	cluster1, distr1 = pair1
-	cluster2, distr2 = pair2
+	seq1, distr1 = pair1
+	seq2, distr2 = pair2
 	hmm1 = hmmFromDistr(distr1)
 	hmm2 = hmmFromDistr(distr2)
-	s1_m2 = hmm2.loglikelihood(toSequenceSet(cluster1))
-	s2_m1 = hmm1.loglikelihood(toSequenceSet(cluster2))
+	s1_m2 = hmm2.loglikelihood(toSequenceSet(seq1))
+	s2_m1 = hmm1.loglikelihood(toSequenceSet(seq2))
 	sym = (s1_m2 + s2_m1)/2.0
 	return min(-1 * sym, MAX_DIST)
 
 def trainHMM(pair):
+	"""
+	Given a pair (S: list of sequences, m: int), train a HMM with at most
+	m states on S. The HMM is initialized with Smyth's default method, then
+	refined with Baum-Welch training.
+
+	@param pair: A tuple of the form (S: list of sequences, m: int)
+	@return: The HMM. TODO: Stop returning this as a string
+	"""
 	cluster, m = pair
 	seqSet = toSequenceSet(cluster)
 	hmm = getDefaultHMM(pair)
@@ -91,6 +129,13 @@ def trainHMM(pair):
 	return str(hmm)
 
 def seqModelPair(pair):
+	"""
+	Given a pair (S: list of sequences, m: int), get a pair
+	(S, B), where B is Smyth's default emission distribution for S.
+
+	@param pair: A tuple of the form (S: list of sequences, m: int)
+	@return: The pair (S, B)
+	"""
 	return (pair[0], getEmissionDistribution(pair))
 
 class HMMCluster():
@@ -118,8 +163,6 @@ class HMMCluster():
 		for c in xrange(0, N):
 			for r in xrange(1+c, N):
 				square[r][c] = 0
-
-		print square
 
 		print "Hierarchical clustering (serial)..."
 		clusters = clusterFromDMatrix(S, self.k, square)
