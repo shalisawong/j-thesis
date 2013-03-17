@@ -4,7 +4,6 @@ def sequenceEq(s1, s2):
 	"""True if s1 = s2, false otherwise"""
 	for i in range(0, len(s1)):
 		if s1[i] != s2[i]: return False
-
 	return True
 
 def singleton(s):
@@ -24,7 +23,6 @@ def clustersToLists(sequenceSet):
 		for seq in seqSet:
 			cluster.append({'relays': list(seq), 'ident': None})
 		clusters.append(cluster)
-
 	return clusters
 
 def seqSetToList(sequenceSet):

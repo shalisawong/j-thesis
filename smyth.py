@@ -1,30 +1,30 @@
 """
-An implementation of Smyth 1997's HMM clustering algorithm. Currently
-only supports time series data with 1-dimensional observations.
-
+An multithreaded implementation of Smyth 1997's HMM clustering algorithm
+for 1-dimensional time series data.
 @author Julian Applebaum
 """
 
 from ghmm import Float, GaussianDistribution, HMMFromMatrices, SequenceSet
 from sklearn.cluster import k_means
-from sklearn.metrics.pairwise import pairwise_distances
+from fastcluster import linkage
+from scipy.cluster.hierarchy import fcluster
+from scipy.spatial.distance import squareform
 from numpy import std, mean, array
 from numpy import float as npfloat
-from scipy.spatial.distance import squareform
-from sample_gen import smyth_example, three_hmm
+from sample_gen import smyth_example
 from matrix_utils import uniformMatrix
-from cluster_utils import clusterFromDMatrix
+from cluster_utils import partition
 from sequence_utils import *
-from hmm_utils import compositeHMM
+from hmm_utils import compositeHMM, hmmToTriple, tripleToHMM
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
-import sys, json
+import sys, json, pickle
 
 EPSILON = .00001
 MAX_DIST = 10**9
 
-# These functions really belong as member functions of HMMCluster,
+# These functions really belong as methods of HMMCluster or lambdas,
 # but we need to leave them at the module level for multiprocessing.
 
 def getEmissionDistribution(pair):
@@ -38,30 +38,25 @@ def getEmissionDistribution(pair):
 	@param pair: A tuple of the form (S: list of sequences, m: int)
 	@return: The corresponding emission distribution encoded as a list
 			 of (mu, stddev) pairs
-
 	"""
 	S, m = pair
 	flattened = []
 	for s in S:
 		for o in s:
 			flattened.append(o)
-
 	vectorized = [[o] for o in flattened]
 	m_prime = min(m, len(flattened))
-	centroids, labels, inertia = k_means(vectorized, m_prime)
-
+	centroids, labels, inertia = k_means(vectorized, m_prime, init='k-means++')
 	clusters = [[] for i in xrange(0, m_prime)]
 	for i in xrange(0, len(flattened)):
 		clusters[labels[i]].append(flattened[i])
-
 	B = []
 	for cluster in clusters:
 		if len(cluster) > 0:
 			mu = mean(cluster)
 			stddev = std(cluster) or EPSILON # The Gaussian is undefined for
 			B.append((mu, stddev))			 # standard deviation of 0, which
-										 	 # can happen on uniform data
-	return B
+	return B								 # can happen on uniform data
 
 def getDefaultHMM(pair):
 	"""
@@ -72,13 +67,13 @@ def getDefaultHMM(pair):
 	"""
 	cluster, m = pair
 	B = getEmissionDistribution(pair)
-	return hmmFromDistr(B)
+	return defaultHMMFromDistr(B)
 
-def hmmFromDistr(B):
+def defaultHMMFromDistr(B):
 	"""
 	Given an emission distribution from getEmissionDistribution, fill
-	in the A and pi matrices for the HMM. We can do this because, since
-	A and pi are both uniform, they can be determined just from the length
+	in the A and pi matrices for Smyth's default HMM. We can do this because,
+	since A and pi are both uniform, they can be determined just from the length
 	of B.
 
 	@param B: An emission distribution encoded as a list of (mu, stddev) pairs
@@ -106,96 +101,113 @@ def symDistance(items):
 	pair1, pair2 = items
 	seq1, distr1 = pair1
 	seq2, distr2 = pair2
-	hmm1 = hmmFromDistr(distr1)
-	hmm2 = hmmFromDistr(distr2)
-	s1_m2 = hmm2.loglikelihood(toSequenceSet(seq1))
-	s2_m1 = hmm1.loglikelihood(toSequenceSet(seq2))
+	hmm1 = defaultHMMFromDistr(distr1)
+	hmm2 = defaultHMMFromDistr(distr2)
+	s1_m2 = hmm2.loglikelihood(toSequence(seq1))
+	s2_m1 = hmm1.loglikelihood(toSequence(seq2))
+	assert not isnan(s1_m2)
+	assert not isnan(s2_m1)
 	sym = (s1_m2 + s2_m1)/2.0
 	return min(-1 * sym, MAX_DIST)
 
 def trainHMM(pair):
 	"""
-	Given a pair (S: list of sequences, m: int), train a HMM with at most
-	m states on S. The HMM is initialized with Smyth's default method, then
-	refined with Baum-Welch training.
+	Given a pair (m: int, S: list of sequences), train a HMM with at
+	most m states on S. The HMM is initialized with Smyth's default method,
+	then refined with Baum-Welch training.
 
-	@param pair: A tuple of the form (S: list of sequences, m: int)
-	@return: The HMM. TODO: Stop returning this as a string
+	@param item: A tuple of the form (m: int, S: list of sequences)
+	@return: A tuple (A, B, pi) representing the trained HMM
 	"""
 	cluster, m = pair
 	seqSet = toSequenceSet(cluster)
 	hmm = getDefaultHMM(pair)
 	hmm.baumWelch(seqSet)
-	return str(hmm)
-
-def seqModelPair(pair):
-	"""
-	Given a pair (S: list of sequences, m: int), get a pair
-	(S, B), where B is Smyth's default emission distribution for S.
-
-	@param pair: A tuple of the form (S: list of sequences, m: int)
-	@return: The pair (S, B)
-	"""
-	return (pair[0], getEmissionDistribution(pair))
+	return hmmToTriple(hmm)
 
 class HMMCluster():
-	def __init__(self, m, k):
-		self.m = m
-		self.k = k
+	def __init__(self, S, max_m, min_k, max_k):
+		self.S = S
+		self.max_m = max_m
+		self.min_k = min_k
+		self.max_k = max_k
 
-	def fit(self, S):
+	def cluster(self):
 		"""
-		Create a m*k state HMM mixture modeling the sequences in S.
-		The HMM is returned as well as the clustering result used for
-		the mixture components.
+		Cluster S into self.k clusters, then train a HMM on each cluster.
+		Each HMM has a maximum of self.max_m states.
 		"""
-		pool = Pool()
-		N = len(S)
+		self.pool = Pool()
+		N = len(self.S)
 		print "Generating default HMMs (parallel)..."
-		seqmodel_pairs = pool.map(seqModelPair, [([s], self.m) for s in S])
+		emission_distrs = self.pool.map(getEmissionDistribution,
+			[([s], self.max_m) for s in self.S])
+		seqmodel_pairs = zip(self.S, emission_distrs)
+		print "Done"
 		dist_pairs = []
 		print "Computing distance matrix (parallel)..."
 		for r in xrange(0, N):
 			for c in xrange(1+r, N):
 				dist_pairs.append((seqmodel_pairs[r], seqmodel_pairs[c]))
-		condensed = pool.map(symDistance, dist_pairs)
-		square = squareform(condensed)
+		condensed = self.pool.map(symDistance, dist_pairs)
+		dmatrix = squareform(condensed)
+		# Get rid of the redundant entries on the lower triangular. For some
+		# reason, it doesn't cluster correctly if I don't do this. Doesn't
+		# make sense to me.
 		for c in xrange(0, N):
 			for r in xrange(1+c, N):
-				square[r][c] = 0
-
+				dmatrix[r][c] = 0
+		print "Done"
 		print "Hierarchical clustering (serial)..."
-		clusters = clusterFromDMatrix(S, self.k, square)
+		self.linkage_matrix = linkage(dmatrix, method='complete',
+			preserve_input=False)
+		print "Done"
+
+	def trainModels(self):
 		print "Training HMMs on clusters (parallel)..."
-		trained_hmms = pool.map(trainHMM, zip(clusters, [self.m]*len(clusters)))
-		self.model = trained_hmms
-		self.clusters = clusters
-
-	def score(self, S_test):
-		return self.model.loglikelihood(seqSetToListequenceSet(S_test))
-
-	def get_params(self, deep):
-		return { 'm': self.m, 'k': self.k }
-
-	def set_params(self, **params):
-		self.m = params['m']
-		self.k = params['k']
+		training_items = []
+		cluster_sizes = []
+		n_mixtures = self.max_k - self.min_k + 1
+		mixtures = dict(zip(range(self.min_k, self.max_k+1), [[]] * n_mixtures))
+		# Cut the dendrogram at different k values and prepare the clusters for
+		# for HMM in training in parallel. Instead of looping through the k values
+		# and training at each one, we "flatten" all of the work items into one list
+		# ensure that all available CPUs are being used.
+		for k in xrange(self.min_k, self.max_k+1):
+			labels = fcluster(self.linkage_matrix, k, 'maxclust')
+			clusters = partition(self.S, k, labels)
+			for cluster in clusters:
+				cluster_sizes.append(len(cluster))
+				training_items.append((cluster, self.max_m))
+		hmm_triples = self.pool.map(trainHMM, training_items)
+		idx = 0
+		# Reconstruct the mixtures for each k from the list of trained HMMS
+		for k in xrange(self.min_k, self.max_k+1):
+			for i in xrange(0, k):
+				cluster_size = cluster_sizes[idx]
+				hmm_triple = hmm_triples[idx]
+				mixtures[k].append((hmm_triple, cluster_size))
+				idx += 1
 
 if __name__ == "__main__":
 	inpath = sys.argv[1]
-	m = int(sys.argv[2])
-	k = int(sys.argv[3])
+	max_m = int(sys.argv[2])
+	min_k = int(sys.argv[3])
+	max_k = int(sys.argv[4])
+	# outpath = sys.argv[4]
 	if inpath == "-smythex":
 		print "Generating synthetic data..."
-		sequences = seqSetToList(smyth_example(n=20))
+		sequences = seqSetToList(smyth_example(n=20, length=200))
 	else:
 		with open(inpath) as datafile:
 			print "Loading data..."
 			circuits = json.load(datafile)
 			sequences = [circ['relays'] for circ in circuits][:100]
+	clust = HMMCluster(sequences, max_m, min_k, max_k)
+	clust.cluster()
+	clust.trainModels()
 
-	print "Clustering..."
-	clust = HMMCluster(m, k)
-	clust.fit(sequences)
-	for hmm in clust.model:
-		print hmm
+	# for hmm in clust.model:
+	# 	print hmm
+	# with open(outpath, 'w') as outfile:
+	# 	pickle.dump(triples, outfile)

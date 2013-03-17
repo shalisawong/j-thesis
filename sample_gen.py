@@ -1,6 +1,6 @@
 from ghmm import GaussianDistribution, Float, SequenceSet, HMMFromMatrices
 
-def make_data(As, Bs, pis, n=20, seed=0):
+def make_data(As, Bs, pis, n=20, length=200, seed=0):
 	S = SequenceSet(Float(), [])
 
 	for i in xrange(0, len(As)):
@@ -9,12 +9,12 @@ def make_data(As, Bs, pis, n=20, seed=0):
 		pi = pis[i]
 		distr = GaussianDistribution(None)
 		hmm = HMMFromMatrices(Float(), distr, A, B, pi, "HMM_%i" % i)
-		sample = hmm.sample(n, 200, seed)
+		sample = hmm.sample(n, length, seed)
 		S.merge(sample)
 
 	return S
 
-def smyth_example(n=20, seed=0):
+def smyth_example(n=20, length=200, seed=0):
 	As = []
 	Bs = []
 	pis = []
@@ -28,9 +28,9 @@ def smyth_example(n=20, seed=0):
  	pis.append([.5, .5])
  	pis.append([.5, .5])
 
- 	return make_data(As, Bs, pis, n, seed)
+ 	return make_data(As, Bs, pis, n, length, seed)
 
-def three_hmm():
+def three_hmm(n=20, length=200, seed=0):
  	As = []
 	Bs = []
 	pis = []
@@ -48,5 +48,5 @@ def three_hmm():
  	pis.append([.5, .5])
  	pis.append([.5, .5])
 
- 	return make_data(As, Bs, pis)
+ 	return make_data(As, Bs, pis, n, length, seed)
 
