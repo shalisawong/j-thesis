@@ -15,7 +15,7 @@ from sample_gen import smyth_example
 from matrix_utils import uniformMatrix
 from cluster_utils import partition
 from sequence_utils import *
-from hmm_utils import compositeHMM, hmmToTriple, tripleToHMM
+from hmm_utils import compositeTriple, hmmToTriple, tripleToHMM
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
@@ -40,16 +40,10 @@ def getEmissionDistribution(pair):
 			 of (mu, stddev) pairs
 	"""
 	S, m = pair
-	flattened = []
-	for s in S:
-		for o in s:
-			flattened.append(o)
-	vectorized = [[o] for o in flattened]
-	m_prime = min(m, len(flattened))
-	centroids, labels, inertia = k_means(vectorized, m_prime, init='k-means++')
-	clusters = [[] for i in xrange(0, m_prime)]
-	for i in xrange(0, len(flattened)):
-		clusters[labels[i]].append(flattened[i])
+	combined = flatten([[o] for o in s] for s in S)
+	m_prime = min(m, len(combined))
+	centroids, labels, inertia = k_means(combined, m_prime, init='k-means++')
+	clusters = partition(combined, m_prime, labels)
 	B = []
 	for cluster in clusters:
 		if len(cluster) > 0:
@@ -128,17 +122,18 @@ def trainHMM(pair):
 class HMMCluster():
 	def __init__(self, S, max_m, min_k, max_k):
 		self.S = S
+		self.n = len(self.S)
 		self.max_m = max_m
 		self.min_k = min_k
 		self.max_k = max_k
+		self.models = {}
+		self.pool = Pool()
 
 	def cluster(self):
 		"""
-		Cluster S into self.k clusters, then train a HMM on each cluster.
+		Cluster self.S into self.k clusters, then train a HMM on each cluster.
 		Each HMM has a maximum of self.max_m states.
 		"""
-		self.pool = Pool()
-		N = len(self.S)
 		print "Generating default HMMs (parallel)..."
 		emission_distrs = self.pool.map(getEmissionDistribution,
 			[([s], self.max_m) for s in self.S])
@@ -146,16 +141,16 @@ class HMMCluster():
 		print "Done"
 		dist_pairs = []
 		print "Computing distance matrix (parallel)..."
-		for r in xrange(0, N):
-			for c in xrange(1+r, N):
+		for r in xrange(0, self.n):
+			for c in xrange(1+r, self.n):
 				dist_pairs.append((seqmodel_pairs[r], seqmodel_pairs[c]))
 		condensed = self.pool.map(symDistance, dist_pairs)
 		dmatrix = squareform(condensed)
 		# Get rid of the redundant entries on the lower triangular. For some
 		# reason, it doesn't cluster correctly if I don't do this. Doesn't
 		# make sense to me.
-		for c in xrange(0, N):
-			for r in xrange(1+c, N):
+		for c in xrange(0, self.n):
+			for r in xrange(1+c, self.n):
 				dmatrix[r][c] = 0
 		print "Done"
 		print "Hierarchical clustering (serial)..."
@@ -167,13 +162,14 @@ class HMMCluster():
 		print "Training HMMs on clusters (parallel)..."
 		training_items = []
 		cluster_sizes = []
-		n_mixtures = self.max_k - self.min_k + 1
-		mixtures = dict(zip(range(self.min_k, self.max_k+1), [[]] * n_mixtures))
+		k_values = range(self.min_k, self.max_k+1)
+		n_mixtures = len(k_values)
+		mixtures = dict(zip(k_values, [([], [])] * n_mixtures))
 		# Cut the dendrogram at different k values and prepare the clusters for
 		# for HMM in training in parallel. Instead of looping through the k values
 		# and training at each one, we "flatten" all of the work items into one list
-		# ensure that all available CPUs are being used.
-		for k in xrange(self.min_k, self.max_k+1):
+		# to ensure that all available CPUs are being used.
+		for k in k_values:
 			labels = fcluster(self.linkage_matrix, k, 'maxclust')
 			clusters = partition(self.S, k, labels)
 			for cluster in clusters:
@@ -182,19 +178,23 @@ class HMMCluster():
 		hmm_triples = self.pool.map(trainHMM, training_items)
 		idx = 0
 		# Reconstruct the mixtures for each k from the list of trained HMMS
-		for k in xrange(self.min_k, self.max_k+1):
+		for k in k_values:
 			for i in xrange(0, k):
 				cluster_size = cluster_sizes[idx]
 				hmm_triple = hmm_triples[idx]
-				mixtures[k].append((hmm_triple, cluster_size))
+				mixtures[k][0].append(hmm_triple)
+				mixtures[k][1].append(cluster_size)
 				idx += 1
+		for k, mixture in mixtures.iteritems():
+			self.models[k] = compositeTriple(mixture)
+		return self.models
 
 if __name__ == "__main__":
 	inpath = sys.argv[1]
 	max_m = int(sys.argv[2])
 	min_k = int(sys.argv[3])
 	max_k = int(sys.argv[4])
-	# outpath = sys.argv[4]
+	outpath = sys.argv[5]
 	if inpath == "-smythex":
 		print "Generating synthetic data..."
 		sequences = seqSetToList(smyth_example(n=20, length=200))
@@ -206,8 +206,5 @@ if __name__ == "__main__":
 	clust = HMMCluster(sequences, max_m, min_k, max_k)
 	clust.cluster()
 	clust.trainModels()
-
-	# for hmm in clust.model:
-	# 	print hmm
-	# with open(outpath, 'w') as outfile:
-	# 	pickle.dump(triples, outfile)
+	with open(outpath, 'w') as outfile:
+		pickle.dump(triples, outfile)

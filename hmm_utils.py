@@ -1,21 +1,30 @@
 from ghmm import HMMFromMatrices, Float, GaussianDistribution
 from matrix_utils import blockDiagMatrix, uniformMatrix
+from sequence_utils import flatten
 
-def compositeHMM(mixture):
+def compositeTriple(mixture):
 	"""
-	Combine hmms into one composite HMM with a block diagonal
-	transition matrix. Initial state probabilities are weighted
-	by corresponding values in weights.
+	Given a pair (models: list of HMM triples: )
+	Combine a list of HMMs into one composite model with a block
+	diagonal transition matrix. I
 
-	@param hmms: A list of ghmm.GaussianEmissionsHMMs
+	@param
 	@return: The composite HMM
 	"""
-	n_seqs = reduce(lambda p, s: s + p[0], mixture, 0)
-	As = map(lambda p: p[0][0])
-	B = reduce(lambda p, b: p[1] + b, mixture)
-
+	models = mixture[0]
+	cluster_sizes = mixture[1]
+	n_seqs = sum(cluster_sizes)
+	weights = map(lambda n: 1.0*n/n_seqs, cluster_sizes)
+	As = [model[0] for model in models]
+	B = flatten(model[1] for model in models)
+	pi = []
+	for i in xrange(0, len(models)):
+		pi_m = models[i][2]
+		weight = weights[i]
+		pi_weighted = map(lambda p: p*weight, pi_m)
+		pi += pi_weighted
 	A = blockDiagMatrix(As)
-	return HMMFromMatrices(Float(), GaussianDistribution(None), A, B, pi)
+	return (A, B, pi)
 
 def hmmToTriple(hmm):
 	"""
