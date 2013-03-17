@@ -11,8 +11,7 @@ def compositeTriple(mixture):
 	@param
 	@return: The composite HMM
 	"""
-	models = mixture[0]
-	cluster_sizes = mixture[1]
+	models, cluster_sizes = mixture
 	n_seqs = sum(cluster_sizes)
 	weights = map(lambda n: 1.0*n/n_seqs, cluster_sizes)
 	As = [model[0] for model in models]
@@ -30,7 +29,7 @@ def hmmToTriple(hmm):
 	"""
 	Convert a ghmm.GaussianEmissionHMM into a serializeable triple (A, B, pi).
 	We need this because Swig objects aren't pickleable, and objects returned
-	from during multiprocessing.pool.map need to be.
+	for multiprocessing.pool.map need to be.
 	@param hmm: The HMM
 	@param return: The triple (A, B, pi)
 	"""
