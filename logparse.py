@@ -1,13 +1,13 @@
 """
-Parse a hack_tor log file infile and output the resulting records as JSON
-to outfile.
-	Syntax: python2.7 logparse.py infile outfile direction
-Direction is either "O" for outgoing cells, or "I" for incoming cells.
-The output file is a JSON string in the format:
+Parse a hack_tor log file infile and output the resulting records as a
+pickled list.
+	Syntax: python2.7 logparse.py infile outfile
+The output file is a pickled list in the format:
 [ { 'ident': [circuit id, ip slug]
 	'create': timestamp of last create cell received
-	'relays': list of timestamps for all relay cells in the circuit
 	'destroy': timestamp of last destroy cell received
+	'relays_in': list of timestamps for incoming relay cells
+	'relays_out': list of timestamps for outgoing relay cells
   },
   { ... },
   { ... },
@@ -17,18 +17,18 @@ The output file is a JSON string in the format:
 """
 
 from datetime import datetime
-import sys, json
+import sys, cPickle
 
 def parse_time(time_str):
 	"""
-	Parse a time string from the Tor logfile. Returns the number of milliseconds
-	since January 1, 2013. We use this date instead of the epoch to avoid enormous
-	timestamps.
+	Parse a time string from the hack_tor logfile. Returns the number
+	of milliseconds since January 1, 2013. We use this date instead of
+	the epoch to avoid enormous timestamps.
 
 	@param time_str: The time string from the logfile
 	@return: The number of milliseconds since January 1, 2013
 	"""
-	augmented = '2013 ' + time_str
+	augmented = "2013 " + time_str
 	date_parsed = datetime.strptime(augmented[0:-4],'%Y %b %d %H:%M:%S')
 	n_seconds = 1.0*(date_parsed - datetime(2013, 1, 1)).total_seconds()
 	n_milliseconds = int(time_str[-3:])
@@ -39,64 +39,77 @@ def parse_line(line):
 	Parse the circuit id, ip slug, and timestamp from a line in
 	the hack_tor log file.
 	@param line: The line
-	@return: A dictionary {
-		'ident': (circid, ipslug),
-		'time': the timestamp
-	}
+	@return: A tuple ((circid, ipslug), timestamp)
 	"""
 	split = line.split(" ")
 	circid = int(split[5])
 	ipslug = int(split[6])
 	time = parse_time(line[0:19])
-	return {
-		'ident': (circid, ipslug),
-		'time': time
-	}
+	return ((circid, ipslug), time)
+
+def is_valid_circ(record):
+	"""
+	Used for filtering out invalid circuits, which could occur given
+	a misbehaving Tor client. To construct a 3-hop circuit, the client
+	needs to send at least 3 RELAY cells, and at least 3 acknowledging
+	RELAY cells need to be sent back. The circuit must also be terminated
+	with at least one DESTROY cell. All RELAY cells must be sent between
+	the last CREATE cell and the first DESTROY cell.
+	"""
+	return (record['destroy'] is not None and
+		    len(record['relays_in']) >= 3 and
+			len(record['relays_out']) >= 3 and
+			record['relays_out'][0] >= record['create'] and
+			record['relays_out'][-1] <= record['destroy'] and
+			record['relays_in'][0] >= record['create'] and
+			record['relays_in'][-1] <= record['destroy'])
 
 if __name__ == "__main__":
 	lfpath = sys.argv[1]
 	outpath = sys.argv[2]
-	direc = sys.argv[3].upper()
 	with open(lfpath) as logfile:
 		print "Reading file..."
 		records = {}
 		n_entries = 0
-		bad_circ_idents = set()
 		print "Parsing..."
 		for line in logfile:
 			n_entries += 1
-			if n_entries % 10000 == 0 and n_entries != 0:
+			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
 			if line[29:35] == "CREATE":
-				entry = parse_line(line)
-				ident = entry['ident']
-				create_time = entry['time']
+				# In the case of multiple CREATE cells, we define the
+				# beginning of the circuit as the time at which the last
+				# CREATE was sent.
+				ident, time = parse_line(line)
 				records[ident] = {
-					'ident': ident,
-					'create': create_time,
-					'relays': [],
-					'destroy': None
+					'create': time,
+					'destroy': None,
+					'relays_in': [],
+					'relays_out': []
 				}
 			elif line[29:36] == "DESTROY":
-				entry = parse_line(line)
-				ident = entry['ident']
+				ident, time = parse_line(line)
 				record = records.get(ident)
 				if record is not None:
-					record['destroy'] = entry['time']
-			elif line[29:33] == "RRC" + direc:
-				entry = parse_line(line)
-				record = records.get(entry['ident'])
+					# In the case of multiple DESTROY cells, we define the
+					# end of the circuit as the time at which the first
+					# DESTROY was sent.
+					if record['destroy'] is None:
+						record['destroy'] = time
+			elif line[29:32] == "RRC":
+				ident, time = parse_line(line)
+				record = records.get(ident)
+				direc = line[32]
 				if record is not None:
-					record['relays'].append(entry['time'])
-
-		print "Removing invalid circuits"
-		bad_circ_idents = set()
-		for record in records.itervalues():
-			if record['destroy'] is None or len(record['relays']) < 3:
-				bad_circ_idents.add(record['ident'])
-		filtered = filter(lambda rec: rec['ident'] not in bad_circ_idents,
-			records.itervalues())
-		print "** %i complete circuits total" % len(filtered)
+					if direc == "I":
+						record['relays_in'].append(time)
+					elif direc == "O":
+						record['relays_out'].append(time)
 		with open(outpath, 'w') as outfile:
-			print "Dumping data to %s" % outpath
-			json.dump(filtered, outfile)
+			print "Removing invalid circuits..."
+			filtered = filter(is_valid_circ, records.itervalues())
+			print "%i circuits total" % len(records)
+			print "%i (%.2f%%) valid circuits" % (len(filtered),
+				100.0*len(filtered)/len(records))
+			print "Dumping valid circuits to %s" % outpath
+			cPickle.dump(filtered, outfile, protocol=2)
