@@ -1,8 +1,10 @@
 """
-Window the sequences in JSON a file output by logparse.py
-Syntax: python window.py infile window_size outfile
+Window the sequences in JSON a file output by logparse.py. Output format
+is the same as that of logparse.py, but the 'relays' field in each record
+is replaced with windowed cell counts.
+	Syntax: python window.py infile window_size outfile
 window_size is in milliseconds.
-@author Julian Applebaum
+@author: Julian Applebaum
 """
 
 from pprint import pprint
@@ -43,10 +45,10 @@ def window(record, window_size):
 	return windowed
 
 if __name__ == "__main__":
-	filepath = sys.argv[1]
+	inpath = sys.argv[1]
 	window_size = int(sys.argv[2])
 	outpath = sys.argv[3]
-	with open(filepath) as data_file:
+	with open(inpath) as data_file:
 		with open(outpath, 'w') as out_file:
 			print "Loading circuit data..."
 			circuits = json.load(data_file)

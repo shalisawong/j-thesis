@@ -1,8 +1,9 @@
 """
-Parse a hack_tor log file, and output the resulting records in JSON.
-Syntax: python2.7 logparse.py infile outfile direction
+Parse a hack_tor log file infile and output the resulting records as JSON
+to outfile.
+	Syntax: python2.7 logparse.py infile outfile direction
 Direction is either "O" for outgoing cells, or "I" for incoming cells.
-The logfile this outputs is in the format:
+The output file is a JSON string in the format:
 [ { 'ident': [circuit id, ip slug]
 	'create': timestamp of last create cell received
 	'relays': list of timestamps for all relay cells in the circuit
@@ -12,6 +13,7 @@ The logfile this outputs is in the format:
   { ... },
   ...
 ]
+@author: Julian Applebaum
 """
 
 from datetime import datetime
@@ -89,13 +91,12 @@ if __name__ == "__main__":
 
 		print "Removing invalid circuits"
 		bad_circ_idents = set()
-		records_flat = records.itervalues()
-		for record in records_flat:
-			if record['destroy'] is None or len(record['relays']) < 4:
-				bad_circ_idents.add(ident)
+		for record in records.itervalues():
+			if record['destroy'] is None or len(record['relays']) < 3:
+				bad_circ_idents.add(record['ident'])
 		filtered = filter(lambda rec: rec['ident'] not in bad_circ_idents,
-			records_flat)
-		print "** %i complete circuits total" % len(records)
+			records.itervalues())
+		print "** %i complete circuits total" % len(filtered)
 		with open(outpath, 'w') as outfile:
 			print "Dumping data to %s" % outpath
 			json.dump(filtered, outfile)
