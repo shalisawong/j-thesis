@@ -1,6 +1,6 @@
 """
 Parse a hack_tor log file, and output the resulting records in JSON.
-Syntax: python logparse.py infile outfile direction
+Syntax: python2.7 logparse.py infile outfile direction
 Direction is either "O" for outgoing cells, or "I" for incoming cells.
 The logfile this outputs is in the format:
 [ { 'ident': [circuit id, ip slug]
@@ -26,12 +26,11 @@ def parse_time(time_str):
 	@param time_str: The time string from the logfile
 	@return: The number of milliseconds since January 1, 2013
 	"""
-    augmented = '2013 ' + time_str
-    date_parsed = datetime.strptime(augmented[0:-4],'%Y %b %d %H:%M:%S')
-    n_seconds = 1.0*(date_parsed - datetime(2013, 1, 1)).total_seconds()
-    n_milliseconds = int(time_str[-3:])
-    print date_parsed
-    return 1000*n_seconds + n_milliseconds
+	augmented = '2013 ' + time_str
+	date_parsed = datetime.strptime(augmented[0:-4],'%Y %b %d %H:%M:%S')
+	n_seconds = 1.0*(date_parsed - datetime(2013, 1, 1)).total_seconds()
+	n_milliseconds = int(time_str[-3:])
+	return 1000*n_seconds + n_milliseconds
 
 def parse_line(line):
 	"""
@@ -58,57 +57,45 @@ if __name__ == "__main__":
 	direc = sys.argv[3].upper()
 	with open(lfpath) as logfile:
 		print "Reading file..."
-		create_times = {} # map circuit idents to start times
-		time_series = {} # map circuit idents to time series
-		zero_circ_ids = []
-		n_incomplete = 0
+		records = {}
+		n_entries = 0
+		bad_circ_idents = set()
 		print "Parsing..."
-		# First pass - determine which circuits are complete
 		for line in logfile:
+			n_entries += 1
+			if n_entries % 10000 == 0 and n_entries != 0:
+				print "%i entries processed" % n_entries
 			if line[29:35] == "CREATE":
-				record = parse_line(line)
-				ident = record['ident']
-				create_time = record['time']
-				create_times[ident] = create_time
+				entry = parse_line(line)
+				ident = entry['ident']
+				create_time = entry['time']
+				records[ident] = {
+					'ident': ident,
+					'create': create_time,
+					'relays': [],
+					'destroy': None
+				}
 			elif line[29:36] == "DESTROY":
-				record = parse_line(line)
-				ident = record['ident']
-				create_time = create_times.get(ident)
-				if create_time is not None:
-					destroy_time = record['time']
-					# This can actually happen, believe it or not. Likely explanation
-					# is that the CREATE cell suffered more latency than the DESTROY,
-					# so they both arrived at the same time.
-					time_series[ident] = {
-						'ident': ident
-						'create': create_time,
-						'relays': [],
-						'destroy': destroy_time,
-					}
-		logfile.seek(0)
-		# Second pass - build time series for complete circuits
-		print "Adding relay timing data..."
-		for line in logfile:
-			if line[29:33] == "RRC" + direc:
-				record = parse_line(line)
-				series = time_series.get(record['ident'])
-				if series is not None:
-					series['relays'].append(record['time'])
-		n_incomplete = len(create_times) - len(time_series)
-		# Third pass - remove invalid circuits. It takes at least 4 relay cells
-		# to build a valid circuit, so we ignore anything less.
-		print "Removing circuits with too few relay cells"
-		for ident, record in time_series.iteritems():
-			if len(record['relays']) < 4:
-				zero_circ_ids.append(ident)
-		for ident in zero_circ_ids:
-			del time_series[ident]
-		percent_complete = 100 * 1.0*len(time_series)/len(create_times)
-		print "** There were %i circuits total" % len(create_times)
-		print "** %i circuits only had CREATE cells" % n_incomplete
-		print "** %i circuits had CREATE and DESTROY, but no RELAY" % len(zero_circ_ids)
-		print "** %d%% (%i) valid, complete circuits" % (percent_complete,
-			len(time_series))
+				entry = parse_line(line)
+				ident = entry['ident']
+				record = records.get(ident)
+				if record is not None:
+					record['destroy'] = entry['time']
+			elif line[29:33] == "RRC" + direc:
+				entry = parse_line(line)
+				record = records.get(entry['ident'])
+				if record is not None:
+					record['relays'].append(entry['time'])
+
+		print "Removing invalid circuits"
+		bad_circ_idents = set()
+		records_flat = records.itervalues()
+		for record in records_flat:
+			if record['destroy'] is None or len(record['relays']) < 4:
+				bad_circ_idents.add(ident)
+		filtered = filter(lambda rec: rec['ident'] not in bad_circ_idents,
+			records_flat)
+		print "** %i complete circuits total" % len(records)
 		with open(outpath, 'w') as outfile:
 			print "Dumping data to %s" % outpath
-			json.dump(time_series.values(), outfile)
+			json.dump(filtered, outfile)

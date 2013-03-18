@@ -1,6 +1,6 @@
 """
 Window the sequences in JSON a file output by logparse.py
-Syntax: python writebucketized infile window_size outfile
+Syntax: python window.py infile window_size outfile
 window_size is in milliseconds.
 @author Julian Applebaum
 """
