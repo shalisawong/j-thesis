@@ -8,7 +8,7 @@ window_size is in milliseconds.
 from pprint import pprint
 import sys, json
 
-def windowize(record, window_size):
+def window(record, window_size):
 	"""
 	Window a circuit's relay cell time series.
 	@param record: The record encoding the time series
@@ -56,8 +56,8 @@ if __name__ == "__main__":
 				print "Circuit %i" % i
 				circ = circuits[i]
 				try:
-					windowized = windowize(circ, window_size)
-					circ['relays'] = windowized
+					windowed = window(circ, window_size)
+					circ['relays'] = windowed
 					good_circs.append(circ)
 				except ValueError, e:
 					print e
