@@ -1,3 +1,8 @@
+"""
+Utility functions for working with sequence data.
+@author: Julian Applebaum
+"""
+
 from ghmm import Float, SequenceSet, EmissionSequence
 
 def sequenceEq(s1, s2):

@@ -1,7 +1,11 @@
 """
 An multithreaded implementation of Smyth 1997's HMM clustering algorithm
 for 1-dimensional time series data.
-@author Julian Applebaum
+	Syntax: python smyth.py infile target_m min_k max_k outpath
+Models for the time series in infile are built and pickled to outpath. target_m,
+min_k, and max_k are parameter for the modeling process. See HMMCluster's
+documentation for explanations.
+@author: Julian Applebaum
 """
 
 from ghmm import Float, GaussianDistribution, HMMFromMatrices, SequenceSet
@@ -24,8 +28,8 @@ import sys, json, pickle
 EPSILON = .00001
 MAX_DIST = 10**9
 
-# These functions really belong as methods of HMMCluster or lambdas,
-# but we need to leave them at the module level for multiprocessing.
+# These functions really belong as methods of HMMCluster, but we need to leave them
+# at the module level for multiprocessing.
 
 def smythEmissionDistribution(pair):
 	"""
@@ -270,7 +274,7 @@ if __name__ == "__main__":
 		with open(inpath) as datafile:
 			print "Loading data..."
 			circuits = json.load(datafile)
-			sequences = [circ['relays'] for circ in circuits][:100]
+			sequences = [circ['relays'] for circ in circuits]
 	clust = HMMCluster(sequences, target_m, min_k, max_k)
 	clust.model()
 	with open(outpath, 'w') as outfile:

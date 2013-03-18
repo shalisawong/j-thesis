@@ -1,3 +1,9 @@
+"""
+Utility functions for creating composite HMMs and converting
+back and forth from ghmm instances.
+@author Julian Applebaum
+"""
+
 from ghmm import HMMFromMatrices, Float, GaussianDistribution
 from matrix_utils import blockDiagMatrix, uniformMatrix
 from sequence_utils import flatten

@@ -1,3 +1,8 @@
+"""
+Utility functions for clustering.
+@author: Julian Applebaum
+"""
+
 def partition(X, k, labels):
 	clusters = [[] for i in range(0, k)]
 	for i in xrange(0, len(labels)):
