@@ -1,39 +1,54 @@
 """
-Window the sequences in JSON a file output by logparse.py. Output format
-is the same as that of logparse.py, but the 'relays' field in each record
-is replaced with windowed cell counts.
-	Syntax: python window.py infile window_size outfile
+Window the sequences from a logparse.py output file. Outputs a pickled dict:
+{ 'window_size': window_size
+  'records': same as input, but with 'relay_in' and 'relay_out' replaced by
+  			 their windowed versions }
+	Syntax: python window.py infile outfile window_size
 window_size is in milliseconds.
 @author: Julian Applebaum
 """
 
 from pprint import pprint
-import sys, json
+from multiprocessing import Pool
+import sys, cPickle
 
-def window(record, window_size):
+def window_record(pair):
 	"""
-	Window a circuit's relay cell time series.
-	@param record: The record encoding the time series
+	Window a record's incoming and outgoing relay time series:
+	@param pair: A pair (record, window_size)
+	@return: The same record, but with both time series replaced by
+		series of window_size cell counts
+	"""
+	record, window_size = pair
+	ident, create, destroy = record['ident'], record['create'], record['destroy']
+	relays_in, relays_out = record['relays_in'], record['relays_out']
+	windowed_in = window_relays(create, destroy, relays_in, window_size)
+	windowed_out = window_relays(create, destroy, relays_out, window_size)
+	return {
+		'ident': ident,
+		'create': create,
+		'destroy': destroy,
+		'relays_in': windowed_in,
+		'relays_out': windowed_out
+	}
+
+def window_relays(create, destroy, relays, window_size):
+	"""
+	Window a relay cell time series.
+	@param create: the timestamp of the last CREATE received
+	@param destroy: the timestamp of the first DESTROY received
+	@param relays: the RELAY cell time series
 	@param: window_size: The length, in milliseconds, of each window
-	@return: The windowed version of the time series component.
+	@return: The windowed version of the relay time series.
 	"""
-	start = record['create']
-	end = record['destroy']
-	relays = record['relays']
-	circ_len = end - start
+	circ_len = destroy - create
 	# make all times relative to the last CREATE cell sent
-	adj_times = [t - start for t in relays]
-	first_relay = adj_times[0]
-	last_relay = adj_times[-1]
-	if first_relay < 0:
-		raise ValueError("!!! Circuit %s had RELAY before CREATE" % record['ident'])
-	elif last_relay > circ_len:
-		raise ValueError("!!! Circuit %s had RELAY after DESTROY" % record['ident'])
+	adj_times = [t - create for t in relays]
 	n_windows = max(1, int(round(circ_len/window_size + .5)))
-	windowed = []
+	windows = []
 	# fill all windows with 0 to start
 	for i in xrange(0, n_windows):
-		windowed.append(0)
+		windows.append(0)
 	window_idx = 0
 	window_end = window_size
 	# fill windows with relay cell counts
@@ -41,27 +56,25 @@ def window(record, window_size):
 		if time > window_end:
 			window_idx += 1
 			window_end += window_size
-		windowed[window_idx] += 1
-	return windowed
+		windows[window_idx] += 1
+	return windows
 
 if __name__ == "__main__":
 	inpath = sys.argv[1]
-	window_size = int(sys.argv[2])
-	outpath = sys.argv[3]
+	outpath = sys.argv[2]
+	window_size = int(sys.argv[3])
+	pool = Pool()
 	with open(inpath) as data_file:
 		with open(outpath, 'w') as out_file:
 			print "Loading circuit data..."
-			circuits = json.load(data_file)
-			print "Windowing %i circuits" % len(circuits)
-			good_circs = []
-			for i in xrange(0, len(circuits)):
-				print "Circuit %i" % i
-				circ = circuits[i]
-				try:
-					windowed = window(circ, window_size)
-					circ['relays'] = windowed
-					good_circs.append(circ)
-				except ValueError, e:
-					print e
+			records = cPickle.load(data_file)
+			print "Windowing %i circuits (parallel)..." % len(records)
+			map_items = zip(records, [window_size] * len(records))
+			windowed = pool.map(window_record, map_items)
+			print "Done"
+			output = {
+				'window_size': window_size,
+				'records': windowed
+			}
 			print "Dumping to %s" % outpath
-			json.dump(good_circs, out_file)
+			cPickle.dump(output, out_file, protocol=2)

@@ -82,6 +82,7 @@ if __name__ == "__main__":
 				# CREATE was sent.
 				ident, time = parse_line(line)
 				records[ident] = {
+					'ident': ident,
 					'create': time,
 					'destroy': None,
 					'relays_in': [],
