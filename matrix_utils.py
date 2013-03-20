@@ -1,3 +1,8 @@
+"""
+Utility functions for working with matrices
+@author: Julian Applebaum
+"""
+
 from numpy import array
 from numpy import float as npfloat
 from ghmm import HMMFromMatrices, Float, GaussianDistribution
@@ -5,12 +10,15 @@ from ghmm import HMMFromMatrices, Float, GaussianDistribution
 def uniformMatrix(c, r, v=0):
 	"""
 	Create a c x r matrix filled with the value v
+	@param c: number of columns
+	@param r: number of rows
+	@param v: the value to fill with
+	@return: the matrix
 	"""
 	matrix = []
 	for i in range(0, r):
-		matrix.append([0]*c)
-
-	return array(matrix, npfloat)
+		matrix.append([v]*c)
+	return matrix
 
 def blockDiagMatrix(matrices):
 	"""
@@ -22,18 +30,18 @@ def blockDiagMatrix(matrices):
 	. 				.
 
 	0	  	  ... A_n
+
+	@param matrices: the matrices
+	@return: the block diagonal combination of A_1...A_n
 	"""
 	ydim = 0
 	xdim = 0
-
 	for matrix in matrices:
 		ydim += len(matrix)
 		xdim += len(matrix[0])
-
-	block_diag = uniformMatrix(xdim, ydim)
+	block_diag = array(uniformMatrix(xdim, ydim), npfloat)
 	x_offset = 0
 	y_offset = 0
-
 	for matrix in matrices:
 		ydim_m = len(matrix)
 		xdim_m = len(matrix[0])
@@ -43,5 +51,4 @@ def blockDiagMatrix(matrices):
 
 		x_offset += xdim_m
 		y_offset += ydim_m
-
 	return block_diag

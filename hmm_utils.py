@@ -10,9 +10,10 @@ from sequence_utils import flatten
 
 def compositeTriple(mixture):
 	"""
-	Given a pair (models: list of HMM triples: )
+	Given a pair (models: list of HMM triples, cluster_sizes: list of int)
 	Combine a list of HMMs into one composite model with a block
-	diagonal transition matrix. I
+	diagonal transition matrix. Initial transition probabilities are
+	weighted by the corresponding cluster sizes.
 
 	@param
 	@return: The composite HMM
