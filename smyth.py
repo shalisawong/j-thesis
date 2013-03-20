@@ -24,7 +24,8 @@ from matrix_utils import uniformMatrix
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
-import sys, json, pickle
+from time import clock
+import sys, json, cPickle
 
 EPSILON = .00001
 MAX_DIST = 10**9
@@ -175,6 +176,7 @@ class HMMCluster():
 		self.partitions = []
 		self.k_values = range(self.min_k, self.max_k+1)
 		self.pool = Pool(n_jobs)
+		self.times = {}
 
 	def _sanityCheck(self):
 		assert self.min_k <= self.max_k
@@ -221,10 +223,13 @@ class HMMCluster():
 		"""
 		Compute the distance matrix with a user specified distance function.
 		"""
+		start = clock()
 		if self.dist_func == 'hmm':
-			return self._getHMMDistMatrix()
+			dmatrix = self._getHMMDistMatrix()
 		elif self.dist_func == 'editdistance':
-			return self._getEditDistMatrix()
+			dmatrix = self._getEditDistMatrix()
+		self.times['dist_matrix'] = clock() - start
+		return dmatrix
 
 	def _hierarchical(self):
 		"""
@@ -232,14 +237,14 @@ class HMMCluster():
 		via hierarchical, agglomerative clustering.
 		"""
 		dist_matrix = self._getDistMatrix()
-		print "Hierachical clustering (serial)...",
+		print "Hierarchical clustering (serial)...",
 		linkage_matrix = linkage(dist_matrix, method='complete',
 			preserve_input=False)
-		print "done"
 		for k in self.k_values:
 			labels = fcluster(linkage_matrix, k, 'maxclust')
 			clusters = partition(self.S, labels)
 			self.partitions.append(clusters)
+		print "done"
 
 	def _kMedoids(self):
 		"""
@@ -262,10 +267,12 @@ class HMMCluster():
 		Create multiple partitions for k values in [self.min_k... self.max_k]
 		with a user specified clustering algorithm.
 		"""
+		start = clock()
 		if self.clust_alg == 'hierarchical':
 			self._hierarchical()
 		elif self.clust_alg == 'kmedoids':
 			self._kMedoids()
+		self.times['clustering'] = clock() - start
 
 	def _trainModelsSeparate(self):
 		"""
@@ -314,6 +321,17 @@ class HMMCluster():
 		self.models = dict(zip(self.k_values, trained_mixtures))
 		print "done"
 
+	def _trainModels(self):
+		"""
+		Train a HMM mixture on each of the k-partitions
+		"""
+		start = clock()
+		if self.train_mode == 'blockdiag':
+			self._trainModelsBlockDiag()
+		elif self.train_mode == 'cluster':
+			self._trainModelsSeparate()
+		self.times['modeling'] = clock() - start
+
 	def model(self):
 		"""
 		With the user specified k range, clustering algorithm, HMM intialization,
@@ -321,11 +339,10 @@ class HMMCluster():
 		sequences in self.S. When finished, self.models is populated with a
 		dict mapping k values to HMM triples.
 		"""
+		start = clock()
 		self._cluster()
-		if self.train_mode == 'blockdiag':
-			self._trainModelsBlockDiag()
-		elif self.train_mode == 'cluster':
-			self._trainModelsSeparate()
+		self._trainModels()
+		self.times['total'] = clock() - start
 
 if __name__ == "__main__":
 	inpath = sys.argv[1]
@@ -338,17 +355,19 @@ if __name__ == "__main__":
 	outpath = sys.argv[8]
 	if inpath == "-smythex":
 		print "Generating synthetic data...",
-		sequences = seqSetToList(smyth_example(n=20, length=200))
+		sequences = seqSetToList(smyth_example(n=100, length=200))
 		print "done"
 	else:
 		with open(inpath) as datafile:
 			print "Loading data..."
-			circuits = json.load(datafile)
+			circuits = cPickle.load(datafile)
 			sequences = [circ['relays'] for circ in circuits]
 	clust = HMMCluster(sequences, target_m, min_k, max_k, dist_func,
 		hmm_init, clust_alg)
 	clust.model()
-	for model in clust.models.itervalues():
-		print tripleToHMM(model)
+	output = {
+		'models': clust.models,
+		'times': clust.times
+	}
 	with open(outpath, 'w') as outfile:
-		pickle.dump(clust.models, outfile)
+		cPickle.dump(output, outfile)
