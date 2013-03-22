@@ -1,3 +1,8 @@
+"""
+Levenshtein distance between 2 series
+@author: Julian Applebaum
+"""
+
 def uniformMatrix(r, c, v=0):
 	"""
 	Create a c x r matrix filled with the value v
@@ -12,6 +17,15 @@ def uniformMatrix(r, c, v=0):
 	return matrix
 
 cdef int levRec(seq1, seq2, int i, int j, memo):
+	"""
+	Recursive helper for levDistance.
+	@param seq1: a sequence of numbers
+	@param seq2: a sequence of numbers
+	@param i: the index to cut seq1 at - start at |seq1|
+	@param j: the index to cut seq2 at - start at |seq2|
+	@param memo: 2d array for memoizing computations
+	@return: The Levenshtein distance between seq1 and seq2
+	"""
 	if min(i, j) == 0:
 		if i > j:
 			return sum(seq1[0:i]) + i
@@ -28,6 +42,13 @@ cdef int levRec(seq1, seq2, int i, int j, memo):
 		return dist
 
 def levDistance(pair):
+	"""
+	Compute the Levenshtein distance between two time series (seq1, seq2).
+	Insertions and deletions cost 1 + value inserted/deleted. Substitutions
+	cost abs(val_seq1 - val_seq2).
+	@param pair: a tuple (seq1, seq2)
+	@return: the Levenshtein distance between seq1 and seq2
+	"""
 	seq1, seq2 = pair
 	cdef int i_init
 	cdef int j_init
