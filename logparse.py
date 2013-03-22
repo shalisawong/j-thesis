@@ -55,6 +55,8 @@ def is_valid_circ(record):
 	RELAY cells need to be sent back. The circuit must also be terminated
 	with at least one DESTROY cell. All RELAY cells must be sent between
 	the last CREATE cell and the first DESTROY cell.
+	@param record: the record representing a circuit
+	@return: True if the circuit is valid, false otherwise
 	"""
 	return (record['destroy'] is not None and
 		    len(record['relays_in']) >= 3 and
