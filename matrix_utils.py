@@ -7,17 +7,17 @@ from numpy import array
 from numpy import float as npfloat
 from ghmm import HMMFromMatrices, Float, GaussianDistribution
 
-def uniformMatrix(c, r, v=0):
+def uniformMatrix(r, c, v=0):
 	"""
 	Create a c x r matrix filled with the value v
-	@param c: number of columns
 	@param r: number of rows
+	@param c: number of columns
 	@param v: the value to fill with
 	@return: the matrix
 	"""
 	matrix = []
-	for i in range(0, r):
-		matrix.append([v]*c)
+	for i in xrange(0, r):
+		matrix.append([v for i in xrange(0,c)])
 	return matrix
 
 def blockDiagMatrix(matrices):

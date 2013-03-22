@@ -15,12 +15,12 @@ from Pycluster import kmedoids
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial.distance import squareform
 from numpy import std, mean, array
-from numpy import float as npfloat
 from sample_gen import smyth_example
 from cluster_utils import partition
 from sequence_utils import *
 from hmm_utils import compositeTriple, hmmToTriple, tripleToHMM
 from matrix_utils import uniformMatrix
+from levenshtein import levDistance
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
@@ -189,20 +189,50 @@ class HMMCluster():
 		"""
 		Compute the distance matrix using Rabiner's HMM distance measure.
 		"""
-		print "Generating default HMMs (parallel)...",
 		if self.hmm_init == 'smyth':
 			init_fn = smythDefaultTriple
 		elif self.hmm_init == 'random':
 			init_fn = randomDefaultTriple
+		print "Generating default HMMs (parallel)...",
+		start = clock()
 		init_hmms = self.pool.map(init_fn, (([s], self.target_m) for s in self.S))
-		seqmodel_pairs = zip(self.S, init_hmms)
+		self.times['init_hmms'] = clock() - start
 		print "done"
+		seqmodel_pairs = zip(self.S, init_hmms)
 		dist_batch = []
+		for i in xrange(0, self.n):
+			for j in xrange(1+i, self.n):
+				dist_batch.append((seqmodel_pairs[i], seqmodel_pairs[j]))
 		print "Computing distance matrix (parallel)...",
-		for r in xrange(0, self.n):
-			for c in xrange(1+r, self.n):
-				dist_batch.append((seqmodel_pairs[r], seqmodel_pairs[c]))
+		start = clock()
 		condensed = self.pool.map(symDistance, dist_batch)
+		self.times['distance_matrix'] = clock() - start
+		print "done"
+		return condensed
+
+	def _getEditDistMatrix(self):
+		"""
+		Compute the distance matrix using edit distance between sequences.
+		"""
+		dist_batch = []
+		for i in xrange(0, self.n):
+			for j in xrange(1+i, self.n):
+				dist_batch.append((self.S[i], self.S[j]))
+		print "Computing distance matrix (parallel)...",
+		start = clock()
+		condensed = map(levDistance, dist_batch)
+		self.times['distance_matrix'] = clock() - start
+		print "done"
+		return condensed
+
+	def _getDistMatrix(self):
+		"""
+		Compute the distance matrix with a user specified distance function.
+		"""
+		if self.dist_func == 'hmm':
+			condensed = self._getHMMDistMatrix()
+		elif self.dist_func == 'editdistance':
+			condensed = self._getEditDistMatrix()
 		dist_matrix = squareform(condensed)
 		# Get rid of the redundant entries on the lower triangular. For some
 		# reason, it doesn't cluster correctly if I don't do this. Doesn't
@@ -210,26 +240,7 @@ class HMMCluster():
 		for c in xrange(0, self.n):
 			for r in xrange(1+c, self.n):
 				dist_matrix[r][c] = 0
-		print "done"
 		return dist_matrix
-
-	def _getEditDistMatrix(self):
-		"""
-		Compute the distance matrix using edit distance between sequences.
-		"""
-		pass
-
-	def _getDistMatrix(self):
-		"""
-		Compute the distance matrix with a user specified distance function.
-		"""
-		start = clock()
-		if self.dist_func == 'hmm':
-			dmatrix = self._getHMMDistMatrix()
-		elif self.dist_func == 'editdistance':
-			dmatrix = self._getEditDistMatrix()
-		self.times['dist_matrix'] = clock() - start
-		return dmatrix
 
 	def _hierarchical(self):
 		"""
@@ -259,7 +270,7 @@ class HMMCluster():
 		for i in xrange(0, len(self.k_values)):
 			k, result = self.k_values[i], results[i]
 			labels, error, nfound = result
-			clusters = partition(self.S, labels)
+			clusteringers = partition(self.S, labels)
 			self.partitions.append(clusters)
 
 	def _cluster(self):
@@ -355,7 +366,7 @@ if __name__ == "__main__":
 	outpath = sys.argv[8]
 	if inpath == "-smythex":
 		print "Generating synthetic data...",
-		sequences = seqSetToList(smyth_example(n=100, length=200))
+		sequences = seqSetToList(smyth_example(n=20, length=200))
 		print "done"
 	else:
 		with open(inpath) as datafile:
