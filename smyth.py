@@ -138,7 +138,7 @@ def kMedoids(args):
 
 class HMMCluster():
 	def __init__(self, S, target_m, min_k, max_k, dist_func='hmm',
-			hmm_init='smyth', clust_alg='hierarchical', train_mode='blockdiag',
+			hmm_init='smyth', clust_alg='hierarchical', train_mode='cluster',
 			n_jobs=None):
 		"""
 		@param S: The sequences to model
@@ -173,7 +173,8 @@ class HMMCluster():
 		self.train_mode = train_mode
 		self._sanityCheck()
 		self.models = {}
-		self.partitions = []
+		self.partitions = {}
+		self.labelings = {}
 		self.k_values = range(self.min_k, self.max_k+1)
 		self.pool = Pool(n_jobs)
 		self.times = {}
@@ -253,8 +254,9 @@ class HMMCluster():
 			preserve_input=False)
 		for k in self.k_values:
 			labels = fcluster(linkage_matrix, k, 'maxclust')
+			self.labelings[k] = labels
 			clusters = partition(self.S, labels)
-			self.partitions.append(clusters)
+			self.partitions[k] = (clusters)
 		print "done"
 
 	def _kMedoids(self):
@@ -270,8 +272,9 @@ class HMMCluster():
 		for i in xrange(0, len(self.k_values)):
 			k, result = self.k_values[i], results[i]
 			labels, error, nfound = result
-			clusteringers = partition(self.S, labels)
-			self.partitions.append(clusters)
+			self.labelings[k] = labels
+			clusters = partition(self.S, labels)
+			self.partitions[k] = (clusters)
 
 	def _cluster(self):
 		"""
@@ -293,7 +296,8 @@ class HMMCluster():
 		batch_items = []
 		cluster_sizes = []
 		# Build a list of mapping items to submit as a bulk job
-		for partition in self.partitions:
+		for k in self.k_values:
+			partition = self.partitions[k]
 			for cluster in partition:
 				cluster_sizes.append(len(cluster))
 				batch_items.append((cluster, self.target_m))
@@ -319,7 +323,8 @@ class HMMCluster():
 		HMM on the whole dataset.
 		"""
 		batch_items = []
-		for partition in self.partitions:
+		for k in self.k_values:
+			partition = self.partitions[k]
 			triples = []
 			cluster_sizes = []
 			for cluster in partition:
@@ -354,6 +359,7 @@ class HMMCluster():
 		self._cluster()
 		self._trainModels()
 		self.times['total'] = clock() - start
+		self.pool.close()
 
 if __name__ == "__main__":
 	inpath = sys.argv[1]
@@ -378,7 +384,8 @@ if __name__ == "__main__":
 	clust.model()
 	output = {
 		'models': clust.models,
-		'times': clust.times
+		'times': clust.times,
+		'labelings': clust.labelings
 	}
 	with open(outpath, 'w') as outfile:
 		cPickle.dump(output, outfile)
