@@ -45,13 +45,43 @@ def smythEmissionDistribution(pair):
 			 of (mu, stddev) pairs
 	"""
 	S, target_m = pair
+
+    ## ND:  Can we combine the flattening, vectorization, and counting
+    ## distinct observations into a single (faster) function?
+
+    ## ND:  flatten(map(list, S))
 	combined = flatten([o for o in s] for s in S)
 	vectorized = [[o] for o in combined]
+
+    ## ND:  Isn't len(vectorized) the number of observations in S, not
+    ## the number of distinct observations?  And don't we want the latter?
 	m_prime = min(target_m, len(vectorized))
+
+    ## ND:  k_means can be parallelized with the n_jobs parameter; are we
+    ## already parallelized by the time we get here?
+    ## JA:  Yes.
 	centroids, labels, inertia = k_means(vectorized, m_prime, init='k-means++')
 	clusters = partition(combined, labels)
 	B = []
 	for cluster in clusters:
+
+        ## ND:  I'd be very worried if len(cluster) = 0, since k-means
+        ## should always produce non-empty clusters.  Hopefully the
+        ## fix to distinct observations above makes this unnecessary,
+        ## and in fact we should replace this test with an assertion
+        ## that len(cluster) > 0.  Don't forget that assertions can
+        ## be disabled at run-time, and this should be done once we are
+        ## confident in the code.
+
+        ## ND:  If the Gaussian is undefined for std. dev. 0, and we can get
+        ## a std. dev. of 0, then in that case we shouldn't use a Gaussian.
+        ## If the std. dev. is 0, then we should use a discrete distribution,
+        ## namely 
+        ##   p(o) = 1.0 if o is the (only) observed symbol
+        ##        = 0.0 otherwise
+        ## Is there any problem with mixing Guassian and discrete
+        ## distribution HMMs?  It doesn't seem like it should be a problem
+        ## to me.
 		if len(cluster) > 0:
 			mu = mean(cluster)
 			stddev = std(cluster) or EPSILON # The Gaussian is undefined for
