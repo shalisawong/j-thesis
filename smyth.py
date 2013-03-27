@@ -25,7 +25,7 @@ from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
 from time import clock
-import sys, json, cPickle
+import sys, cPickle
 
 EPSILON = .00001
 MAX_DIST = 10**9
@@ -42,7 +42,7 @@ def smythEmissionDistribution(pair):
 
 	@param pair: A tuple of the form (S: list of sequences, m: int)
 	@return: The corresponding emission distribution encoded as a list
-			 of (mu, stddev) pairs
+		of (mu, stddev) pairs
 	"""
 	S, target_m = pair
 
@@ -410,7 +410,7 @@ if __name__ == "__main__":
 			circuits = cPickle.load(datafile)
 			sequences = [circ['relays'] for circ in circuits]
 	clust = HMMCluster(sequences, target_m, min_k, max_k, dist_func,
-		hmm_init, clust_alg)
+		hmm_init, clust_alg, train_mode='blockdiag')
 	clust.model()
 	output = {
 		'models': clust.models,

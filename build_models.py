@@ -46,5 +46,3 @@ if __name__ == "__main__":
 		# print "Edit Distance Model (inbound)"
 		# editdist_in.model()
 		# dump_model(editfile, "/editdist_in_m%i.pickle" % target_m, 'w')
-
-
