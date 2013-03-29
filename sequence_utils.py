@@ -24,10 +24,11 @@ def toSequenceSet(S):
 	"""
 	return SequenceSet(Float(), S)
 
-def toSequence(s):
+def toSequence(s, domain=Float()):
 	"""
 	Convert a sequence in list form to a ghmm.EmissionSequence
 	@param: a sequence in Python list form
+	@param domain: the ghmm emission domain
 	@param: the sequence as a ghmm.EmissionSequence
 	"""
 	return EmissionSequence(Float(), s)

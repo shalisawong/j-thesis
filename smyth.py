@@ -27,66 +27,53 @@ from multiprocessing import Pool
 from time import clock
 import sys, cPickle
 
-EPSILON = .00001
+# If two sequences are very different, their symmetrized distance may be
+#infinity. The clustering algorithms don't like that, so we make it a very
+# high number instead.
 MAX_DIST = 10**9
+EPSILON = .000001
 
 # These functions really belong as methods of HMMCluster, but we need to leave
 # them at the module level for multiprocessing.
+
+def prepareSeqs(S):
+	"""
+	Combine the observations from a set of sequences into a merged list of
+	1d vectors, and get the set of distinct observation values in one pass.
+	@param S: the set of sequences
+	@return: A pair (merged, distinct)
+	"""
+	distinct = set()
+	merged = []
+	for s in S:
+		for o in s:
+			merged.append([o])
+			distinct.add(o)
+	return (merged, distinct)
 
 def smythEmissionDistribution(pair):
 	"""
 	Given a pair (S: list of sequences, target_m: int), get the emission
 	distribution for Smyth's "default" HMM. target_m is an upper bound on the
-	number of states -- if we can only produce m' nonempty clusters,
-	then the distribution for a m' state HMM is returned.
+	number of states -- if we can only have m' distinct observation values, then
+	the distribution for a m' state HMM is returned.
 
 	@param pair: A tuple of the form (S: list of sequences, m: int)
 	@return: The corresponding emission distribution encoded as a list
 		of (mu, stddev) pairs
 	"""
 	S, target_m = pair
-
-    ## ND:  Can we combine the flattening, vectorization, and counting
-    ## distinct observations into a single (faster) function?
-
-    ## ND:  flatten(map(list, S))
-	combined = flatten([o for o in s] for s in S)
-	vectorized = [[o] for o in combined]
-
-    ## ND:  Isn't len(vectorized) the number of observations in S, not
-    ## the number of distinct observations?  And don't we want the latter?
-	m_prime = min(target_m, len(vectorized))
-
-    ## ND:  k_means can be parallelized with the n_jobs parameter; are we
-    ## already parallelized by the time we get here?
-    ## JA:  Yes.
-	centroids, labels, inertia = k_means(vectorized, m_prime, init='k-means++')
-	clusters = partition(combined, labels)
+	merged, distinct = prepareSeqs(S)
+	m_prime = min(target_m, len(distinct))
+	centroids, labels, inertia = k_means(merged, m_prime, init='k-means++')
+	clusters = partition(merged, labels)
 	B = []
 	for cluster in clusters:
-
-        ## ND:  I'd be very worried if len(cluster) = 0, since k-means
-        ## should always produce non-empty clusters.  Hopefully the
-        ## fix to distinct observations above makes this unnecessary,
-        ## and in fact we should replace this test with an assertion
-        ## that len(cluster) > 0.  Don't forget that assertions can
-        ## be disabled at run-time, and this should be done once we are
-        ## confident in the code.
-
-        ## ND:  If the Gaussian is undefined for std. dev. 0, and we can get
-        ## a std. dev. of 0, then in that case we shouldn't use a Gaussian.
-        ## If the std. dev. is 0, then we should use a discrete distribution,
-        ## namely 
-        ##   p(o) = 1.0 if o is the (only) observed symbol
-        ##        = 0.0 otherwise
-        ## Is there any problem with mixing Guassian and discrete
-        ## distribution HMMs?  It doesn't seem like it should be a problem
-        ## to me.
-		if len(cluster) > 0:
-			mu = mean(cluster)
-			stddev = std(cluster) or EPSILON # The Gaussian is undefined for
-			B.append((mu, stddev))			 # standard deviation of 0, which
-	return B								 # can happen on uniform data
+		assert len(cluster) > 0
+		mu = mean(cluster)
+		stddev = std(cluster) or EPSILON
+		B.append((mu, stddev))
+	return B
 
 def smythDefaultTriple(pair):
 	"""
@@ -135,7 +122,6 @@ def symDistance(args):
 def reestimated(pair):
 	"""
 	Perform Baum-Welch reestimation on a HMM triple with the sequences in S.
-	the result.
 	@param pair: a tuple (triple, S)
 	@return: the reestimated triple
 	"""
@@ -206,6 +192,7 @@ class HMMCluster():
 		self.partitions = {}
 		self.labelings = {}
 		self.k_values = range(self.min_k, self.max_k+1)
+		self.init_hmms = []
 		self.pool = Pool(n_jobs)
 		self.times = {}
 
@@ -226,10 +213,11 @@ class HMMCluster():
 			init_fn = randomDefaultTriple
 		print "Generating default HMMs (parallel)...",
 		start = clock()
-		init_hmms = self.pool.map(init_fn, (([s], self.target_m) for s in self.S))
+		self.init_hmms = self.pool.map(init_fn,
+			(([s], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
 		print "done"
-		seqmodel_pairs = zip(self.S, init_hmms)
+		seqmodel_pairs = zip(self.S, self.init_hmms)
 		dist_batch = []
 		for i in xrange(0, self.n):
 			for j in xrange(1+i, self.n):
@@ -331,7 +319,8 @@ class HMMCluster():
 			for cluster in partition:
 				cluster_sizes.append(len(cluster))
 				batch_items.append((cluster, self.target_m))
-		mixtures = dict(zip(self.k_values, (([], []) for k in self.k_values)))
+		mixtures = dict(zip(self.k_values, ({'hmm_triples': [],
+			'cluster_sizes': []} for k in self.k_values)))
 		print "Training HMMs on clusters (parallel)...",
 		hmm_triples = self.pool.map(trainHMM, batch_items)
 		print "done"
@@ -341,14 +330,14 @@ class HMMCluster():
 			for i in xrange(0, k):
 				cluster_size = cluster_sizes[idx]
 				hmm_triple = hmm_triples[idx]
-				mixtures[k][0].append(hmm_triple)
-				mixtures[k][1].append(cluster_size)
+				mixtures[k]['hmm_triples'].append(hmm_triple)
+				mixtures[k]['cluster_sizes'].append(cluster_size)
 				idx += 1
-		for k, mixture in mixtures.iteritems():
-			self.models[k] = compositeTriple(mixture)
+		self.models = mixtures
 
 	def _trainModelsBlockDiag(self):
 		"""
+		XXX: Probably going to deprecate soon.
 		Train a HMM mixture on each of the k-partitions by training one
 		HMM on the whole dataset.
 		"""
@@ -392,30 +381,10 @@ class HMMCluster():
 		self.pool.close()
 
 if __name__ == "__main__":
-	inpath = sys.argv[1]
-	target_m = int(sys.argv[2])
-	min_k = int(sys.argv[3])
-	max_k = int(sys.argv[4])
-	dist_func = sys.argv[5]
-	hmm_init = sys.argv[6]
-	clust_alg = sys.argv[7]
-	outpath = sys.argv[8]
-	if inpath == "-smythex":
-		print "Generating synthetic data...",
-		sequences = seqSetToList(smyth_example(n=20, length=200))
-		print "done"
-	else:
-		with open(inpath) as datafile:
-			print "Loading data..."
-			circuits = cPickle.load(datafile)
-			sequences = [circ['relays'] for circ in circuits]
-	clust = HMMCluster(sequences, target_m, min_k, max_k, dist_func,
-		hmm_init, clust_alg, train_mode='blockdiag')
+	print "Generating synthetic data...",
+	sequences = seqSetToList(smyth_example(n=20, length=200))
+	print "done"
+	clust = HMMCluster(sequences, 2, 2, 3)
 	clust.model()
-	output = {
-		'models': clust.models,
-		'times': clust.times,
-		'labelings': clust.labelings
-	}
-	with open(outpath, 'w') as outfile:
-		cPickle.dump(output, outfile)
+	for k in clust.k_values:
+		print tripleToHMM(clust.models[k])

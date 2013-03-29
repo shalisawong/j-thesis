@@ -4,9 +4,9 @@ back and forth from ghmm instances.
 @author Julian Applebaum
 """
 
-from ghmm import HMMFromMatrices, Float, GaussianDistribution
 from matrix_utils import blockDiagMatrix, uniformMatrix
 from sequence_utils import flatten
+from ghmm import Float, GaussianDistribution, HMMFromMatrices
 
 def compositeTriple(mixture):
 	"""
@@ -54,7 +54,8 @@ def hmmToTriple(hmm):
 
 def tripleToHMM(triple):
 	"""
-	Get the ghmm.GaussianEmissionHMM corresponding to the triple (A, B, pi)
+	Get the ghmm.HMM corresponding to the triple (A, B, pi). If all of the
+	distributions in B have standard deviations of 0, we create a
 	@param triple: The triple
 	@return: The HMM
 	"""
