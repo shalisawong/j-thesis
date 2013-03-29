@@ -14,7 +14,7 @@ from fastcluster import linkage
 from Pycluster import kmedoids
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial.distance import squareform
-from numpy import std, mean, array
+from numpy import std, mean, array, float64
 from sample_gen import smyth_example
 from cluster_utils import partition
 from sequence_utils import *
@@ -24,6 +24,7 @@ from levenshtein import levDistance
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
+from itertools import izip
 from time import clock
 import sys, cPickle
 
@@ -92,7 +93,10 @@ def smythDefaultTriple(pair):
 	m_prime = len(B)
 	A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
 	pi = [1.0/m_prime] * m_prime
-	return (A, B, pi)
+	hmm = tripleToHMM((A, B, pi))
+	hmm.baumWelch(toSequenceSet(cluster))
+	return hmmToTriple(hmm)
+	# return (A, B, pi)
 
 def randomDefaultTriple(pair):
 	pass
@@ -203,6 +207,13 @@ class HMMCluster():
 		assert self.clust_alg in ('hierarchical', 'kmedoids')
 		assert self.train_mode in ('blockdiag', 'cluster')
 
+	def _getHMMBatchItems(self):
+		for i in xrange(0, self.n):
+			for j in xrange(1+i, self.n):
+				pair_1 = (self.S[i], self.init_hmms[i])
+				pair_2 = (self.S[j], self.init_hmms[j])
+				yield (pair_1, pair_2)
+
 	def _getHMMDistMatrix(self):
 		"""
 		Compute the distance matrix using Rabiner's HMM distance measure.
@@ -217,17 +228,13 @@ class HMMCluster():
 			(([s], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
 		print "done"
-		seqmodel_pairs = zip(self.S, self.init_hmms)
-		dist_batch = []
-		for i in xrange(0, self.n):
-			for j in xrange(1+i, self.n):
-				dist_batch.append((seqmodel_pairs[i], seqmodel_pairs[j]))
+		dist_batch = self._getHMMBatchItems()
 		print "Computing distance matrix (parallel)...",
 		start = clock()
 		condensed = self.pool.map(symDistance, dist_batch)
 		self.times['distance_matrix'] = clock() - start
 		print "done"
-		return condensed
+		return array(condensed, float64)
 
 	def _getEditDistMatrix(self):
 		"""
@@ -252,14 +259,7 @@ class HMMCluster():
 			condensed = self._getHMMDistMatrix()
 		elif self.dist_func == 'editdistance':
 			condensed = self._getEditDistMatrix()
-		dist_matrix = squareform(condensed)
-		# Get rid of the redundant entries on the lower triangular. For some
-		# reason, it doesn't cluster correctly if I don't do this. Doesn't
-		# make sense to me.
-		for c in xrange(0, self.n):
-			for r in xrange(1+c, self.n):
-				dist_matrix[r][c] = 0
-		return dist_matrix
+		return condensed
 
 	def _hierarchical(self):
 		"""
@@ -382,9 +382,8 @@ class HMMCluster():
 
 if __name__ == "__main__":
 	print "Generating synthetic data...",
-	sequences = seqSetToList(smyth_example(n=20, length=200))
+	sequences = seqSetToList(smyth_example(n=20, length=200, seed=12))
 	print "done"
 	clust = HMMCluster(sequences, 2, 2, 3)
 	clust.model()
-	for k in clust.k_values:
-		print tripleToHMM(clust.models[k])
+	print tripleToHMM(compositeTriple(clust.models[2]))

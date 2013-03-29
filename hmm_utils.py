@@ -18,7 +18,7 @@ def compositeTriple(mixture):
 	@param
 	@return: The composite HMM
 	"""
-	models, cluster_sizes = mixture
+	models, cluster_sizes = mixture['hmm_triples'], mixture['cluster_sizes']
 	n_seqs = sum(cluster_sizes)
 	weights = map(lambda n: 1.0*n/n_seqs, cluster_sizes)
 	As = [model[0] for model in models]

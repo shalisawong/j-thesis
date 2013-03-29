@@ -7,7 +7,7 @@ MAX_K = 7
 MIN_M = 4
 MAX_M = 10
 BETA = .5
-N_TRIALS = 20
+N_TRIALS = 10
 
 if __name__ == "__main__":
 	logging.disable('warning')

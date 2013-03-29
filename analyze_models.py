@@ -7,6 +7,6 @@ if __name__ == "__main__":
 	with open(filepath) as results_file:
 		trials = cPickle.load(results_file)
 		trial = trials[0]
-		model = trial['models'][2]
+		model = trial['models'][4]
 		pprint(model['hmm_triples'])
 		print model['cluster_sizes']
