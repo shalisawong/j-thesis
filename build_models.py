@@ -1,4 +1,5 @@
 from smyth import HMMCluster
+from numpy import std
 from random import shuffle, seed
 import sys, cPickle, logging, cProfile
 
@@ -22,17 +23,22 @@ if __name__ == "__main__":
 				print "** Trial %i of %i **" % (i+1, N_TRIALS)
 				seed(i)
 				shuffle(records)
-				sample = records[:int(BETA*len(records))]
-				out_series = [record['relays_out'] for record in sample]
+				out_series = [record['relays_out'] for record in records]
+				out_series = out_series[:int(BETA*len(records))]
+				print "Training on %i time series" % len(out_series)
 				smyth_out = HMMCluster(out_series, target_m, MIN_K, MAX_K, 'hmm',
 					'smyth', 'hierarchical', 'cluster')
 				smyth_out.model()
 				trials.append({
-					'models': smyth_out.models,
+					'components': smyth_out.components,
 					'init_hmms': smyth_out.init_hmms,
 					'times': smyth_out.times,
 					'labelings': smyth_out.labelings,
-					'randseed': i
+					'randseed': i,
+					'beta': BETA,
+					'min_k': MIN_K,
+					'max_k': MAX_K,
+					'target_m': target_m
 				})
 			outpath = outdir + "/smyth_out_m%i.pickle" % target_m
 			with open(outpath, 'w') as outfile:

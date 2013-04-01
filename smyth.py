@@ -10,8 +10,8 @@ documentation for explanations.
 
 from ghmm import Float, GaussianDistribution, HMMFromMatrices, SequenceSet
 from sklearn.cluster import k_means
-from fastcluster import linkage
-from Pycluster import kmedoids
+# from fastcluster import linkage
+from Pycluster import kmedoids, treecluster
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial.distance import squareform
 from numpy import std, mean, array, float64
@@ -28,15 +28,19 @@ from itertools import izip
 from time import clock
 import sys, cPickle
 
-# If two sequences are very different, their symmetrized distance may be
-#infinity. The clustering algorithms don't like that, so we make it a very
-# high number instead.
-MAX_DIST = 10**9
-EPSILON = .000001
+# If two sequences are very different, their symmetrized distance may be -infinity.
+MIN_SYM = -1000
+EPSILON = .0001
+
+def printAndFlush(string):
+	"""
+	Print a string and flush stdout.
+	"""
+	print string
+	sys.stdout.flush()
 
 # These functions really belong as methods of HMMCluster, but we need to leave
 # them at the module level for multiprocessing.
-
 def prepareSeqs(S):
 	"""
 	Combine the observations from a set of sequences into a merged list of
@@ -96,7 +100,7 @@ def smythDefaultTriple(pair):
 	hmm = tripleToHMM((A, B, pi))
 	hmm.baumWelch(toSequenceSet(cluster))
 	return hmmToTriple(hmm)
-	# return (A, B, pi)
+	return (A, B, pi)
 
 def randomDefaultTriple(pair):
 	pass
@@ -120,8 +124,7 @@ def symDistance(args):
 	s2_m1 = hmm1.loglikelihood(toSequence(seq2))
 	assert not isnan(s1_m2)
 	assert not isnan(s2_m1)
-	sym = (s1_m2 + s2_m1)/2.0
-	return min(-1 * sym, MAX_DIST)
+	return max(MIN_SYM, (s1_m2 + s2_m1)/2.0)
 
 def reestimated(pair):
 	"""
@@ -192,7 +195,8 @@ class HMMCluster():
 		self.clust_alg = clust_alg
 		self.train_mode = train_mode
 		self._sanityCheck()
-		self.models = {}
+		self.components = {}
+		self.dist_matrix = None
 		self.partitions = {}
 		self.labelings = {}
 		self.k_values = range(self.min_k, self.max_k+1)
@@ -222,18 +226,19 @@ class HMMCluster():
 			init_fn = smythDefaultTriple
 		elif self.hmm_init == 'random':
 			init_fn = randomDefaultTriple
-		print "Generating default HMMs (parallel)...",
+		printAndFlush("Generating default HMMs (parallel)...")
 		start = clock()
 		self.init_hmms = self.pool.map(init_fn,
 			(([s], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
-		print "done"
+		printAndFlush("done")
 		dist_batch = self._getHMMBatchItems()
-		print "Computing distance matrix (parallel)...",
+		printAndFlush("Computing distance matrix (parallel)...")
 		start = clock()
 		condensed = self.pool.map(symDistance, dist_batch)
 		self.times['distance_matrix'] = clock() - start
-		print "done"
+		printAndFlush("done")
+		condensed = map(lambda l: -1*l, condensed)
 		return array(condensed, float64)
 
 	def _getEditDistMatrix(self):
@@ -244,11 +249,11 @@ class HMMCluster():
 		for i in xrange(0, self.n):
 			for j in xrange(1+i, self.n):
 				dist_batch.append((self.S[i], self.S[j]))
-		print "Computing distance matrix (parallel)...",
+		printAndFlush("Computing distance matrix (parallel)...")
 		start = clock()
 		condensed = map(levDistance, dist_batch)
 		self.times['distance_matrix'] = clock() - start
-		print "done"
+		printAndFlush("done")
 		return condensed
 
 	def _getDistMatrix(self):
@@ -266,27 +271,29 @@ class HMMCluster():
 		Create multiple partitions for k values in [self.min_k... self.max_k]
 		via hierarchical, agglomerative clustering.
 		"""
-		dist_matrix = self._getDistMatrix()
-		print "Hierarchical clustering (serial)...",
-		linkage_matrix = linkage(dist_matrix, method='complete',
-			preserve_input=False)
+		self.dist_matrix = self._getDistMatrix()
+		printAndFlush("Hierarchical clustering (serial)...")
+		# linkage_matrix = linkage(dist_matrix, method='complete',
+		# 	preserve_input=False)
+		tree = treecluster(distancematrix=self.dist_matrix)
 		for k in self.k_values:
-			labels = fcluster(linkage_matrix, k, 'maxclust')
+			# labels = fcluster(linkage_matrix, k, 'maxclust')
+			labels = tree.cut(k)
 			self.labelings[k] = labels
 			clusters = partition(self.S, labels)
 			self.partitions[k] = (clusters)
-		print "done"
+		printAndFlush("done")
 
 	def _kMedoids(self):
 		"""
 		Create multiple partitions for k values in [self.min_k... self.max_k]
 		via k-medoids.
 		"""
-		dist_matrix = self._getDistMatrix()
-		batch_items = ((dist_matrix, k, 10) for k in self.k_values)
-		print "K-medoids clustering (parallel)...",
+		self.dist_matrix = self._getDistMatrix()
+		batch_items = ((self.dist_matrix, k, 10) for k in self.k_values)
+		printAndFlush("K-medoids clustering (parallel)...")
 		results = self.pool.map(kMedoids, batch_items)
-		print "done"
+		printAndFlush("done")
 		for i in xrange(0, len(self.k_values)):
 			k, result = self.k_values[i], results[i]
 			labels, error, nfound = result
@@ -306,7 +313,7 @@ class HMMCluster():
 			self._kMedoids()
 		self.times['clustering'] = clock() - start
 
-	def _trainModelsSeparate(self):
+	def _trainModels(self):
 		"""
 		Train a HMM mixture on each of the k-partitions by separately training
 		an HMM on each cluster.
@@ -316,62 +323,34 @@ class HMMCluster():
 		# Build a list of mapping items to submit as a bulk job
 		for k in self.k_values:
 			partition = self.partitions[k]
+			# print "%i %i" % (k, len(partition))
+			# printAndFlush([len(c) for c in partition])
 			for cluster in partition:
 				cluster_sizes.append(len(cluster))
 				batch_items.append((cluster, self.target_m))
-		mixtures = dict(zip(self.k_values, ({'hmm_triples': [],
+		self.components = dict(izip(self.k_values, ({'hmm_triples': [],
 			'cluster_sizes': []} for k in self.k_values)))
-		print "Training HMMs on clusters (parallel)...",
+		printAndFlush("Training components on clusters (parallel)...")
+		start = clock()
 		hmm_triples = self.pool.map(trainHMM, batch_items)
-		print "done"
+		self.times['modeling'] = clock() - start
+		printAndFlush("done")
 		idx = 0
 		# Reconstruct the mixtures for each k from the list of trained HMMS
 		for k in self.k_values:
 			for i in xrange(0, k):
 				cluster_size = cluster_sizes[idx]
 				hmm_triple = hmm_triples[idx]
-				mixtures[k]['hmm_triples'].append(hmm_triple)
-				mixtures[k]['cluster_sizes'].append(cluster_size)
+				self.components[k]['hmm_triples'].append(hmm_triple)
+				self.components[k]['cluster_sizes'].append(cluster_size)
 				idx += 1
-		self.models = mixtures
-
-	def _trainModelsBlockDiag(self):
-		"""
-		XXX: Probably going to deprecate soon.
-		Train a HMM mixture on each of the k-partitions by training one
-		HMM on the whole dataset.
-		"""
-		batch_items = []
-		for k in self.k_values:
-			partition = self.partitions[k]
-			triples = []
-			cluster_sizes = []
-			for cluster in partition:
-				triples.append(smythDefaultTriple((cluster, self.target_m)))
-				cluster_sizes.append(len(cluster))
-			composite = compositeTriple((triples, cluster_sizes))
-			batch_items.append((composite, self.S))
-		print "Training composite HMMs on dataset (parallel)...",
-		trained_mixtures = self.pool.map(reestimated, batch_items)
-		self.models = dict(zip(self.k_values, trained_mixtures))
 		print "done"
-
-	def _trainModels(self):
-		"""
-		Train a HMM mixture on each of the k-partitions
-		"""
-		start = clock()
-		if self.train_mode == 'blockdiag':
-			self._trainModelsBlockDiag()
-		elif self.train_mode == 'cluster':
-			self._trainModelsSeparate()
-		self.times['modeling'] = clock() - start
 
 	def model(self):
 		"""
 		With the user specified k range, clustering algorithm, HMM intialization,
 		and distance function, create a set of HMM mixtures modeling the
-		sequences in self.S. When finished, self.models is populated with a
+		sequences in self.S. When finished, self.components is populated with a
 		dict mapping k values to HMM triples.
 		"""
 		start = clock()
@@ -382,8 +361,11 @@ class HMMCluster():
 
 if __name__ == "__main__":
 	print "Generating synthetic data...",
-	sequences = seqSetToList(smyth_example(n=20, length=200, seed=12))
+	seqSet = smyth_example(n=40, length=200, seed=11)
 	print "done"
-	clust = HMMCluster(sequences, 2, 2, 3)
+	clust = HMMCluster(seqSetToList(seqSet), 2, 2, 2,
+		clust_alg='hierarchical')
 	clust.model()
-	print tripleToHMM(compositeTriple(clust.models[2]))
+	hmm = tripleToHMM(compositeTriple(clust.components[2]))
+	hmm.baumWelch(seqSet)
+	print hmm

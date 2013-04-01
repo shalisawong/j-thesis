@@ -49,7 +49,7 @@ def hmmToTriple(hmm):
 		pi.append(state.pi)
 		B.append((state.getMean(0), state.getStdDev(0)))
 		for j in xrange(0, cmodel.N):
-			A[i][j] = state.getOutProb(j)
+			A[i,j] = state.getOutProb(j)
 	return (A, B, pi)
 
 def tripleToHMM(triple):

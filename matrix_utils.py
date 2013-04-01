@@ -4,7 +4,7 @@ Utility functions for working with matrices
 """
 
 from numpy import array
-from numpy import float as npfloat
+from numpy import float64 as npfloat
 from ghmm import HMMFromMatrices, Float, GaussianDistribution
 
 def uniformMatrix(r, c, v=0):
@@ -18,7 +18,7 @@ def uniformMatrix(r, c, v=0):
 	matrix = []
 	for i in xrange(0, r):
 		matrix.append([v for i in xrange(0,c)])
-	return matrix
+	return array(matrix, npfloat)
 
 def blockDiagMatrix(matrices):
 	"""
