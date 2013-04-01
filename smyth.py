@@ -24,12 +24,13 @@ from levenshtein import levDistance
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
-from itertools import izip
+from itertools import izip, islice
 from time import clock
 import sys, cPickle
 
 # If two sequences are very different, their symmetrized distance may be -infinity.
 MIN_SYM = -1000
+# Pad out the Gaussian if we get a cluster with uniform data
 EPSILON = .0001
 
 def printAndFlush(string):
@@ -232,10 +233,19 @@ class HMMCluster():
 			(([s], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
 		printAndFlush("done")
-		dist_batch = self._getHMMBatchItems()
+		n_batchitems = (self.n)*(self.n+1)/2 - self.n
+		condensed = []
 		printAndFlush("Computing distance matrix (parallel)...")
+		printAndFlush("Processing %i batch items" % n_batchitems)
 		start = clock()
-		condensed = self.pool.map(symDistance, dist_batch)
+		# Split the distance matrix calc
+		batch_size = 100000
+		for i in xrange(0, (n_batchitems)/batch_size + 1):
+			start, stop = batch_size*i, min(batch_size*(i+1), n_batchitems)
+			printAndFlush("Items %i-%i" % (start, stop))
+			dist_batch = self._getHMMBatchItems()
+			mini_batch = islice(dist_batch, start, stop)
+			condensed += self.pool.map(symDistance, mini_batch)
 		self.times['distance_matrix'] = clock() - start
 		printAndFlush("done")
 		condensed = map(lambda l: -1*l, condensed)
