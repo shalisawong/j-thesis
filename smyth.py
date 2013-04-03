@@ -10,11 +10,11 @@ documentation for explanations.
 
 from ghmm import Float, GaussianDistribution, HMMFromMatrices, SequenceSet
 from sklearn.cluster import k_means
-# from fastcluster import linkage
+from fastcluster import linkage
 from Pycluster import kmedoids, treecluster
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial.distance import squareform
-from numpy import std, mean, array, float64
+from numpy import std, mean, array, float32
 from sample_gen import smyth_example
 from cluster_utils import partition
 from sequence_utils import *
@@ -24,14 +24,13 @@ from levenshtein import levDistance
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
-from itertools import izip, islice
+from itertools import izip, islice, ifilter
 from time import clock
 import sys, cPickle
 
-# If two sequences are very different, their symmetrized distance may be -infinity.
-MIN_SYM = -1000
-# Pad out the Gaussian if we get a cluster with uniform data
-EPSILON = .0001
+# Pad out the Gaussian if we get a cluster with uniform data - o/w, we
+# get undefined Gaussians on HMM initialization.
+EPSILON = .5
 
 def printAndFlush(string):
 	"""
@@ -77,7 +76,7 @@ def smythEmissionDistribution(pair):
 	for cluster in clusters:
 		assert len(cluster) > 0
 		mu = mean(cluster)
-		stddev = std(cluster) or EPSILON
+		stddev = std(cluster)
 		B.append((mu, stddev))
 	return B
 
@@ -100,8 +99,15 @@ def smythDefaultTriple(pair):
 	pi = [1.0/m_prime] * m_prime
 	hmm = tripleToHMM((A, B, pi))
 	hmm.baumWelch(toSequenceSet(cluster))
-	return hmmToTriple(hmm)
-	return (A, B, pi)
+	A_p, B_p, pi_p = hmmToTriple(hmm)
+	# According to the GHMM mailing list, a very small standard deviation can
+	# cause underflow errors when attempting to compute log likelihood. We
+	# avoid this by placing a floor sigma >= .5. It's a little hacky, but given
+	# the very fuzzy nature of our training data (considering network latency,
+	# etc.), it's not unreasonable to assume that "uniform" measurements really
+	# should have some jitter.
+	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+	return (A_p, B_p, pi_p)
 
 def randomDefaultTriple(pair):
 	pass
@@ -123,9 +129,9 @@ def symDistance(args):
 	hmm2 = tripleToHMM(triple2)
 	s1_m2 = hmm2.loglikelihood(toSequence(seq1))
 	s2_m1 = hmm1.loglikelihood(toSequence(seq2))
-	assert not isnan(s1_m2)
-	assert not isnan(s2_m1)
-	return max(MIN_SYM, (s1_m2 + s2_m1)/2.0)
+	assert s1_m2 <= 0
+	assert s2_m1 <= 0
+	return (s1_m2 + s2_m1)/2.0
 
 def reestimated(pair):
 	"""
@@ -197,6 +203,7 @@ class HMMCluster():
 		self.train_mode = train_mode
 		self._sanityCheck()
 		self.components = {}
+		self.composites = {}
 		self.dist_matrix = None
 		self.partitions = {}
 		self.labelings = {}
@@ -238,8 +245,9 @@ class HMMCluster():
 		printAndFlush("Computing distance matrix (parallel)...")
 		printAndFlush("Processing %i batch items" % n_batchitems)
 		start = clock()
-		# Split the distance matrix calc
-		batch_size = 100000
+		# Split the distance matrix calculation into mini batches of 500,000
+		# pairs to avoid a bug in the multiprocessing API.
+		batch_size = 500000
 		for i in xrange(0, (n_batchitems)/batch_size + 1):
 			start, stop = batch_size*i, min(batch_size*(i+1), n_batchitems)
 			printAndFlush("Items %i-%i" % (start, stop))
@@ -248,8 +256,11 @@ class HMMCluster():
 			condensed += self.pool.map(symDistance, mini_batch)
 		self.times['distance_matrix'] = clock() - start
 		printAndFlush("done")
-		condensed = map(lambda l: -1*l, condensed)
-		return array(condensed, float64)
+		# log-likelihoods are <= 0, a distance function must be positive
+		shifted = map(lambda l: -1*l, condensed)
+		printAndFlush(("Minimum distance:", min(shifted)))
+		printAndFlush(("Maximum distance:", max(shifted)))
+		return array(shifted, float32)
 
 	def _getEditDistMatrix(self):
 		"""
@@ -261,7 +272,7 @@ class HMMCluster():
 				dist_batch.append((self.S[i], self.S[j]))
 		printAndFlush("Computing distance matrix (parallel)...")
 		start = clock()
-		condensed = map(levDistance, dist_batch)
+		condensed = self.pool.map(levDistance, dist_batch)
 		self.times['distance_matrix'] = clock() - start
 		printAndFlush("done")
 		return condensed
@@ -283,14 +294,14 @@ class HMMCluster():
 		"""
 		self.dist_matrix = self._getDistMatrix()
 		printAndFlush("Hierarchical clustering (serial)...")
-		# linkage_matrix = linkage(dist_matrix, method='complete',
-		# 	preserve_input=False)
-		tree = treecluster(distancematrix=self.dist_matrix)
+		tree = treecluster(distancematrix=self.dist_matrix, method='m')
+		# linkage_matrix = linkage(self.dist_matrix, method='complete')
 		for k in self.k_values:
-			# labels = fcluster(linkage_matrix, k, 'maxclust')
 			labels = tree.cut(k)
+			# labels = fcluster(linkage_matrix, k, 'maxclust')
 			self.labelings[k] = labels
 			clusters = partition(self.S, labels)
+			print len(clusters)
 			self.partitions[k] = (clusters)
 		printAndFlush("done")
 
@@ -330,16 +341,20 @@ class HMMCluster():
 		"""
 		batch_items = []
 		cluster_sizes = []
+		seq_lens = []
 		# Build a list of mapping items to submit as a bulk job
 		for k in self.k_values:
 			partition = self.partitions[k]
-			# print "%i %i" % (k, len(partition))
-			# printAndFlush([len(c) for c in partition])
 			for cluster in partition:
 				cluster_sizes.append(len(cluster))
+				seq_lens.append(map(lambda s: len(s), cluster))
 				batch_items.append((cluster, self.target_m))
-		self.components = dict(izip(self.k_values, ({'hmm_triples': [],
-			'cluster_sizes': []} for k in self.k_values)))
+		for k in self.k_values:
+			self.components[k] = {
+				'hmm_triples': [],
+				'cluster_sizes': [],
+				'seq_lens': []
+			}
 		printAndFlush("Training components on clusters (parallel)...")
 		start = clock()
 		hmm_triples = self.pool.map(trainHMM, batch_items)
@@ -350,10 +365,14 @@ class HMMCluster():
 		for k in self.k_values:
 			for i in xrange(0, k):
 				cluster_size = cluster_sizes[idx]
+				inclust_seq_lens = seq_lens[idx]
 				hmm_triple = hmm_triples[idx]
 				self.components[k]['hmm_triples'].append(hmm_triple)
 				self.components[k]['cluster_sizes'].append(cluster_size)
+				self.components[k]['seq_lens'].append(inclust_seq_lens)
 				idx += 1
+			composite = tripleToHMM(compositeTriple(self.components[k]))
+			self.composites[k] = hmmToTriple(composite)
 		print "done"
 
 	def model(self):

@@ -52,7 +52,7 @@ def hmmToTriple(hmm):
 			A[i,j] = state.getOutProb(j)
 	return (A, B, pi)
 
-def tripleToHMM(triple):
+def tripleToHMM(triple, distr=GaussianDistribution(None)):
 	"""
 	Get the ghmm.HMM corresponding to the triple (A, B, pi). If all of the
 	distributions in B have standard deviations of 0, we create a
@@ -60,4 +60,4 @@ def tripleToHMM(triple):
 	@return: The HMM
 	"""
 	A, B, pi = triple
-	return HMMFromMatrices(Float(), GaussianDistribution(None), A, B, pi)
+	return HMMFromMatrices(Float(), distr, A, B, pi)

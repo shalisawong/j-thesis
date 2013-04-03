@@ -16,13 +16,13 @@ def sequenceEq(s1, s2):
 		if s1[i] != s2[i]: return False
 	return True
 
-def toSequenceSet(S):
+def toSequenceSet(S, domain=Float()):
 	"""
 	Convert a list of sequences into a ghmm.SequenceSet
 	@param S: a list of sequences as Python lists
 	@return: the sequences as a ghmm.SequenceSet
 	"""
-	return SequenceSet(Float(), S)
+	return SequenceSet(domain, S)
 
 def toSequence(s, domain=Float()):
 	"""
@@ -31,7 +31,7 @@ def toSequence(s, domain=Float()):
 	@param domain: the ghmm emission domain
 	@param: the sequence as a ghmm.EmissionSequence
 	"""
-	return EmissionSequence(Float(), s)
+	return EmissionSequence(domain, s)
 
 def seqSetToList(S):
 	"""

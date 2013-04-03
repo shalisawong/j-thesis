@@ -12,7 +12,7 @@ def make_data(As, Bs, pis, n=20, length=200, seed=0):
 		S.merge(sample)
 	return S
 
-def smyth_example(n=20, length=200, seed=None):
+def smyth_example(n=20, length=200, seed=0):
 	As = []
 	Bs = []
 	pis = []
@@ -20,7 +20,7 @@ def smyth_example(n=20, length=200, seed=None):
 		   	   [.4, .6]])
 	As.append([[.1, .9],
  		   	   [.9, .1]])
- 	Bs.append([(0, 1), (3, 1)])
+ 	Bs.append([(0, 20), (3, 1)])
  	Bs.append([(0, 1), (3, 1)])
  	pis.append([.5, .5])
  	pis.append([.5, .5])
