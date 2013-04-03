@@ -13,7 +13,7 @@ identifier of the single series to view, in the format 'circ_id,ip_slug'.
 """
 
 from scipy.stats import skew, pearsonr
-from numpy import mean, std, linspace, correlate
+from numpy import mean, std, median, linspace, correlate
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 from matplotlib.patches import Rectangle
 from sklearn.cluster import k_means
@@ -86,17 +86,6 @@ def summarize(values, name):
 	print "Std Dev:", std(values)
 	print "*" * border_len, "\n"
 
-def seq_cmp(x, y):
-	"""
-	Order sequences by their length, ascending
-	@param x: a sequence
-	@param y: a sequence
-	@return: 1 if len(x) > len(y), 0 of len(x) = len(y), 0 otherwise
-	"""
-	if len(x) == len(y): return 0
-	elif len(x) > len(y): return 1
-	else: return -1
-
 def discretize(relay_series, k):
 	"""
 	Cluster the observations in relay_series into k bins, and replace each
@@ -135,60 +124,68 @@ def do_summarize(records, direc_key):
 	mean_cells_per_window_aggr = []
 	min_cells_per_window_aggr = []
 	max_cells_per_window_aggr = []
+	median_cells_per_window_aggr = []
 	stddev_cells_per_window_aggr = []
 	inst_counts_aggr = []
 	for record in records:
 		relays = record[direc_key]
 		circ_len_aggr.append((record['destroy'] - record['create'])/1000.0)
 		mean_cells_per_window_aggr.append(1.0*sum(relays)/len(relays))
+		median_cells_per_window_aggr.append(median(relays))
 		min_cells_per_window_aggr.append(min(relays))
 		max_cells_per_window_aggr.append(max(relays))
 		stddev_cells_per_window_aggr.append(std(relays))
 		inst_counts_aggr += relays
 	fig = plt.figure()
 
-	lenplot = fig.add_subplot(321)
-	plt.title("Circuit Times")
-	plt.xlabel("Circuit Time (seconds)")
-	plt.ylabel("Frequency")
-	plt.yscale('log')
-	lenplot.hist(circ_len_aggr, bins=N_HIST_BINS)
-
-	meansplot = fig.add_subplot(322)
-	plt.title("Mean Cells/Bucket")
-	plt.xlabel("Mean Cells/Bucket")
+	meansplot = fig.add_subplot(421)
+	plt.title("Mean Cells/Window")
+	plt.xlabel("Mean Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	meansplot.hist(mean_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	minsplot = fig.add_subplot(323)
-	plt.title("Min Cells/Bucket")
-	plt.xlabel("Min Cells/Bucket")
+	cellsplot = fig.add_subplot(422)
+	plt.title("Median Cells/Window")
+	plt.xlabel("Median Cells/Window")
+	plt.ylabel("Frequency")
+	plt.yscale('log')
+	cellsplot.hist(median_cells_per_window_aggr, bins=N_HIST_BINS)
+
+	minsplot = fig.add_subplot(423)
+	plt.title("Min Cells/Window")
+	plt.xlabel("Min Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	minsplot.hist(min_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	maxsplot = fig.add_subplot(324)
-	plt.title("Max Cells/Bucket")
-	plt.xlabel("Max Cells/Bucket")
+	maxsplot = fig.add_subplot(424)
+	plt.title("Max Cells/Window")
+	plt.xlabel("Max Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	maxsplot.hist(max_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	stddevsplot = fig.add_subplot(325)
-	plt.title("Std Dev. of Cells/Bucket")
-	plt.xlabel("Std Dev. Cells/Bucket")
+	stddevsplot = fig.add_subplot(425)
+	plt.title("Std Dev. of Cells/Window")
+	plt.xlabel("Std Dev. of Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	stddevsplot.hist(stddev_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(326)
-	plt.title("Instantaneous Cell Count")
-	plt.xlabel("Instantaneous Cell Count")
+	cellsplot = fig.add_subplot(426)
+	plt.title("Single Window Cell Count")
+	plt.xlabel("Single Window Cell Count")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(inst_counts_aggr, bins=N_HIST_BINS)
 
+	lenplot = fig.add_subplot(427)
+	plt.title("Circuit Length (seconds)")
+	plt.xlabel("Circuit Length (seconds)")
+	plt.ylabel("Frequency")
+	plt.yscale('log')
+	lenplot.hist(circ_len_aggr, bins=N_HIST_BINS)
 	fig.tight_layout()
 
 def do_horizon(records, direc_key, window_size):
@@ -205,7 +202,7 @@ def do_horizon(records, direc_key, window_size):
 	ax = fig.add_subplot(111)
 	plt.title("Horizon Chart (n=%i)" % len(sample))
 	plt.xlabel("Window # (%i ms windows)" % window_size)
-	plt.ylabel("Outgoing Relay Cells/Bucket")
+	plt.ylabel("Outgoing Relay Cells/Window")
 	plt.grid(True)
 	for record in sample:
 		series = record[direc_key]
@@ -216,7 +213,7 @@ def do_horizon(records, direc_key, window_size):
 
 def do_timeplot(records, direc_key, window_size, ts_ident):
 	"""
-	Display a time plot for one time series
+	Display a time plot and a correlogram for one time series
 	@param records: the list of circuits records containing the series
 	@param direc_key: 'relays_in' for incoming relays, 'relays_out' for
 		outgoing
@@ -226,8 +223,8 @@ def do_timeplot(records, direc_key, window_size, ts_ident):
 	fig = plt.figure()
 	fig.canvas.set_window_title("%i-%i-%i" % (ts_ident[0], ts_ident[1],
 		window_size))
-	timeplot = fig.add_subplot(121)
-	acorrplot = fig.add_subplot(122)
+	timeplot = fig.add_subplot(111)
+	# acorrplot = fig.add_subplot(122)
 	for record in records:
 		if record['ident'] == ts_ident:
 			plt.xlabel("Window # (%i ms windows)" % window_size)
@@ -235,7 +232,7 @@ def do_timeplot(records, direc_key, window_size, ts_ident):
 			series = record[direc_key]
 			timeplot.fill_between(range(0, len(series)), series, [0]*len(series),
 				color='grey')
-			acorr_plot(series, acorrplot)
+			# acorr_plot(series, acorrplot)
 
 def do_colorplot(records, direc_key, window_size):
 	"""
@@ -245,7 +242,14 @@ def do_colorplot(records, direc_key, window_size):
 		outgoing
 	@param window_size: the size of the cell count windows
 	"""
+	def rec_cmp(rec_1, rec_2):
+		relays_1, relays_2 = rec_1[direc_key], rec_2[direc_key]
+		if len(relays_1) == len(relays_2): return 0
+		elif len(relays_1) > len(relays_2): return 1
+		else: return -1
+
 	sample = draw_sample(records)
+	sample.sort(cmp=rec_cmp)
 	n_clusters = 6
 	colors =[(1.0*i/n_clusters,)*3 for i in xrange(1, n_clusters+1)]
 	cmap = ListedColormap(colors)
@@ -264,7 +268,7 @@ def do_colorplot(records, direc_key, window_size):
 	plt.ylabel("Client")
 	plt.legend(legend_rects, legend_labels, loc=4)
 	n = 0
-	for i in xrange(0, len(sample):
+	for i in xrange(0, len(sample)):
 		series = relay_series[i]
 		ident = sample[i]['ident']
 		artist = ax.scatter(range(0, len(series)), [n]*len(series),
