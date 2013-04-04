@@ -168,8 +168,7 @@ def kMedoids(args):
 
 class HMMCluster():
 	def __init__(self, S, target_m, min_k, max_k, dist_func='hmm',
-			hmm_init='smyth', clust_alg='hierarchical', train_mode='cluster',
-			n_jobs=None):
+			hmm_init='smyth', clust_alg='hierarchical', n_jobs=None):
 		"""
 		@param S: The sequences to model
 		@param target_m: The desired number of components per HMM. The training
@@ -185,10 +184,6 @@ class HMMCluster():
 			and intial state distributions.
 		@param clust_alg: Either 'hierarchical' or 'kmedoids'. Specifies
 			which clustering algorithm to use.
-		@param train_mode: Either 'blockdiag' or 'cluster'. If 'blockdiag',
-			we make the block diagonal model and perform Baum-Welch with the
-			whole dataset (the way Smyth does). If 'cluster', we train on each
-			cluster, then combine into the block diagonal.
 		@param n_jobs: How many processes to spawn for parallel computations.
 			If None, cpu_count() processes are created.
 		"""
@@ -200,7 +195,6 @@ class HMMCluster():
 		self.dist_func = dist_func
 		self.hmm_init = hmm_init
 		self.clust_alg = clust_alg
-		self.train_mode = train_mode
 		self._sanityCheck()
 		self.components = {}
 		self.composites = {}
@@ -217,7 +211,6 @@ class HMMCluster():
 		assert self.dist_func in ('hmm', 'editdistance')
 		assert self.hmm_init in ('smyth', 'random')
 		assert self.clust_alg in ('hierarchical', 'kmedoids')
-		assert self.train_mode in ('blockdiag', 'cluster')
 
 	def _getHMMBatchItems(self):
 		for i in xrange(0, self.n):
@@ -258,8 +251,8 @@ class HMMCluster():
 		printAndFlush("done")
 		# log-likelihoods are <= 0, a distance function must be positive
 		shifted = map(lambda l: -1*l, condensed)
-		printAndFlush(("Minimum distance:", min(shifted)))
-		printAndFlush(("Maximum distance:", max(shifted)))
+		printAndFlush("Minimum distance: %i" % min(shifted))
+		printAndFlush("Maximum distance: %i" % max(shifted))
 		return array(shifted, float32)
 
 	def _getEditDistMatrix(self):
@@ -294,14 +287,21 @@ class HMMCluster():
 		"""
 		self.dist_matrix = self._getDistMatrix()
 		printAndFlush("Hierarchical clustering (serial)...")
-		tree = treecluster(distancematrix=self.dist_matrix, method='m')
-		# linkage_matrix = linkage(self.dist_matrix, method='complete')
+		# tree = treecluster(distancematrix=self.dist_matrix, method='m')
+		linkage_matrix = linkage(self.dist_matrix, method='complete')
 		for k in self.k_values:
-			labels = tree.cut(k)
-			# labels = fcluster(linkage_matrix, k, 'maxclust')
+			# labels = tree.cut(k)
+			labels = fcluster(linkage_matrix, k, 'maxclust')
 			self.labelings[k] = labels
 			clusters = partition(self.S, labels)
-			print len(clusters)
+			# Technically, scipy's tree cutting function isn't guaranteed to
+			# produce k clusters. It only seems to do this when there's a very
+			# lopsided distance matrix, as was the case before we used log
+			# observations. With log observations, it's been fine, and it
+			# performs better than Pycluster's analogous routine.
+			if len(clusters) != k:
+				raise ValueError("fcluster could only produce %i clusters!" %
+					len(clusters))
 			self.partitions[k] = (clusters)
 		printAndFlush("done")
 
@@ -390,10 +390,9 @@ class HMMCluster():
 
 if __name__ == "__main__":
 	print "Generating synthetic data...",
-	seqSet = smyth_example(n=40, length=200, seed=11)
+	seqSet = smyth_example(Ns=(100, 20), lengths=(200, 200), seed=9)
 	print "done"
-	clust = HMMCluster(seqSetToList(seqSet), 2, 2, 2,
-		clust_alg='hierarchical')
+	clust = HMMCluster(seqSetToList(seqSet), 2, 2, 2)
 	clust.model()
 	hmm = tripleToHMM(compositeTriple(clust.components[2]))
 	hmm.baumWelch(seqSet)
