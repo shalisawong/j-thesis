@@ -6,7 +6,7 @@ back and forth from ghmm instances.
 
 from matrix_utils import blockDiagMatrix, uniformMatrix
 from sequence_utils import flatten
-from ghmm import Float, GaussianDistribution, HMMFromMatrices
+import ghmm
 
 def compositeTriple(mixture):
 	"""
@@ -32,6 +32,17 @@ def compositeTriple(mixture):
 	A = blockDiagMatrix(As)
 	return (A, B, pi)
 
+def getDynamics(hmm):
+	cmodel = hmm.cmodel
+	A = uniformMatrix(cmodel.N, cmodel.N)
+	pi = []
+	for i in xrange(0, cmodel.N):
+		state = cmodel.getState(i)
+		pi.append(state.pi)
+		for j in xrange(0, cmodel.N):
+			A[i,j] = state.getOutProb(j)
+	return (A, pi)
+
 def hmmToTriple(hmm):
 	"""
 	Convert a ghmm.GaussianEmissionHMM into a serializeable triple (A, B, pi).
@@ -41,18 +52,14 @@ def hmmToTriple(hmm):
 	@param return: The triple (A, B, pi)
 	"""
 	cmodel = hmm.cmodel
-	A = uniformMatrix(cmodel.N, cmodel.N)
+	A, pi = getDynamics(hmm)
 	B = []
-	pi = []
 	for i in xrange(0, cmodel.N):
 		state = cmodel.getState(i)
-		pi.append(state.pi)
 		B.append((state.getMean(0), state.getStdDev(0)))
-		for j in xrange(0, cmodel.N):
-			A[i,j] = state.getOutProb(j)
 	return (A, B, pi)
 
-def tripleToHMM(triple, distr=GaussianDistribution(None)):
+def tripleToHMM(triple, distr=ghmm.GaussianDistribution(None)):
 	"""
 	Get the ghmm.HMM corresponding to the triple (A, B, pi). If all of the
 	distributions in B have standard deviations of 0, we create a
@@ -60,4 +67,15 @@ def tripleToHMM(triple, distr=GaussianDistribution(None)):
 	@return: The HMM
 	"""
 	A, B, pi = triple
-	return HMMFromMatrices(Float(), distr, A, B, pi)
+	return ghmm.HMMFromMatrices(ghmm.Float(), distr, A, B, pi)
+
+def discreteDefaultDMM(min_label, max_label):
+	sigma = ghmm.IntegerRange(min_label, max_label+1)
+	alpha_len = max_label - min_label + 1
+	A = uniformMatrix(alpha_len, alpha_len, 1.0/alpha_len)
+	B = uniformMatrix(alpha_len, alpha_len)
+	for i in xrange(0, alpha_len):
+		B[i, i] = 1
+	pi = [1.0/alpha_len]*alpha_len
+	distr = ghmm.DiscreteDistribution(sigma)
+	return ghmm.HMMFromMatrices(sigma, distr, A, B, pi)

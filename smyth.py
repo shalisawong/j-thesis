@@ -8,7 +8,7 @@ documentation for explanations.
 @author: Julian Applebaum
 """
 
-from ghmm import Float, GaussianDistribution, HMMFromMatrices, SequenceSet
+from ghmm import Alphabet
 from sklearn.cluster import k_means
 from fastcluster import linkage
 from Pycluster import kmedoids, treecluster
@@ -18,7 +18,7 @@ from numpy import std, mean, array, float32
 from sample_gen import smyth_example
 from cluster_utils import partition
 from sequence_utils import *
-from hmm_utils import compositeTriple, hmmToTriple, tripleToHMM
+from hmm_utils import *
 from matrix_utils import uniformMatrix
 from levenshtein import levDistance
 from pprint import pprint
@@ -26,22 +26,42 @@ from math import isnan
 from multiprocessing import Pool
 from itertools import izip, islice, ifilter
 from time import clock
+from random import uniform
 import sys, cPickle
 
-# Pad out the Gaussian if we get a cluster with uniform data - o/w, we
-# get undefined Gaussians on HMM initialization.
+# Minimum standard deviation for a state in the clustering phase. Anything
+# less than this leaves log likelihood prone to underflow errors.
 EPSILON = .5
 
 def validateTriple(triple):
+	"""
+	Check that a HMM has valid probability distributions.
+	@param triple: a triple (A, B, pi)
+	@return: True if there are no negative numbers and all distributions
+		sum to 1 (within .0001 tolerance), False otherwise
+	"""
 	A, B, pi = triple
 	for row in A:
-		if abs(sum(row)-1.0) > .001:
+		if abs(sum(row)-1.0) > .0001:
 			 return False
 		for a in row:
 			if a < 0: return False
-	if abs(sum(pi)-1.0) > .001:
+	if abs(sum(pi)-1.0) > .0001:
 		return False
 	return True
+
+def correctDMMTransitions(A):
+	"""
+	Given a Discrete Markov Model, we may have a state at the end that hasn't
+	been visited before. Since this state's transitions are undefined, we just
+	give it a uniform distribution. If they are defined, leave it alone.
+	@param: The transition matrix
+	@return: The "corrected" transition matrix
+	"""
+	for i in xrange(0, len(A)):
+		if sum(A[i]) == 0:
+			A[i] = [1.0/len(A)] * len(A)
+	return A
 
 def printAndFlush(string):
 	"""
@@ -52,6 +72,7 @@ def printAndFlush(string):
 
 # These functions really belong as methods of HMMCluster, but we need to leave
 # them at the module level for multiprocessing.
+
 def prepareSeqs(S):
 	"""
 	Combine the observations from a set of sequences into a merged list of
@@ -84,12 +105,15 @@ def smythEmissionDistribution(pair):
 	centroids, labels, inertia = k_means(merged, m_prime, init='k-means++')
 	clusters = partition(merged, labels)
 	B = []
+	has_zero = False
 	for cluster in clusters:
 		assert len(cluster) > 0
 		mu = mean(cluster)
 		stddev = std(cluster)
 		B.append((mu, stddev))
-	return B
+		if stddev < 0.001:
+			has_zero = True
+	return (B, labels, has_zero)
 
 def trainHMM(pair):
 	"""
@@ -104,27 +128,49 @@ def trainHMM(pair):
 	@return: The HMM as a (A, B, pi) triple
 	"""
 	cluster, target_m = pair
-	hmm = None
-	while target_m > 1:
-		B = smythEmissionDistribution((cluster, target_m))
-		m_prime = len(B)
+	B, labels, has_zero = smythEmissionDistribution((cluster, target_m))
+	m_prime = len(B)
+	pi = [1.0/m_prime] * m_prime
+	if not has_zero:
 		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
-		pi = [1.0/m_prime] * m_prime
 		hmm = tripleToHMM((A, B, pi))
 		hmm.baumWelch(toSequenceSet(cluster))
 		A_p, B_p, pi_p = hmmToTriple(hmm)
-		# According to the GHMM mailing list, a very small standard deviation
-		# can cause underflow errors when attempting to compute log likelihood.
-		# We avoid this by placing a floor sigma >= .5. It's a little hacky, but
-		# given the very fuzzy nature of our training data (considering network
-	  	# latency, etc.), it's not unreasonable to assume that "uniform"
-		# measurements really should have some jitter.
-		B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
-		triple = (A_p, B_p, pi_p)
-		if validateTriple(triple):
-			return triple
-		target_m -= 1
-	raise ValueError("Couldn't construct a valid HMM! %s" % hmm)
+	else:
+		# If we have a state with zero standard deviation, Baum Welch dies on
+		# a continuous HMM dies with overflow errors. To fix this, we replace
+		# each observation with its cluster label, then train a Discrete Markov
+		# Model on these sequences. We don't get to reestimate B at all, but
+		# we do get to reestimate the dynamics. The B produced by the clustering
+		# step has been pretty robust in simulation studies.
+		hmm = discreteDefaultDMM(min(labels), max(labels))
+		seq_lens = [len(seq) for seq in cluster]
+		offset = 0
+		label_seqs = [[] for seq in cluster]
+		seq_idx = 0
+		for i, label in enumerate(labels):
+			if i == seq_lens[0] + offset:
+				offset += seq_lens.pop(0)
+				seq_idx += 1
+			label_seqs[seq_idx].append(label)
+		domain = Alphabet(range(min(labels), max(labels)+1))
+		hmm.baumWelch(toSequenceSet(label_seqs, domain))
+		A_p0, pi_p = getDynamics(hmm)
+		A_p = correctDMMTransitions(A_p0)
+		B_p = B
+	# According to the GHMM mailing list, a very small standard deviation
+	# can cause underflow errors when attempting to compute log likelihood.
+	# We avoid this by placing a floor sigma >= .5. It's a little hacky, but
+	# given the very fuzzy nature of our training data (considering network
+  	# latency, etc.), it's not unreasonable to assume that "uniform"
+	# measurements could have some jitter. Any extra variance added to the
+	# cluster can always be corrected away with another round of Baum Welch.
+	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+	triple = (A_p, B_p, pi_p)
+	if validateTriple(triple):
+		return triple
+	raise ValueError("Could not build a valid HMM! \n %s \n %s" % (
+		tripleToHMM(triple), label_seqs))
 
 def randomDefaultTriple(pair):
 	pass
@@ -397,5 +443,5 @@ if __name__ == "__main__":
 	clust = HMMCluster(seqSetToList(seqSet), 2, 2, 2)
 	clust.model()
 	hmm = tripleToHMM(compositeTriple(clust.components[2]))
-	# hmm.baumWelch(seqSet)
+	hmm.baumWelch(seqSet)
 	print hmm
