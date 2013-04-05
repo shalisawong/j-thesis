@@ -32,6 +32,17 @@ import sys, cPickle
 # get undefined Gaussians on HMM initialization.
 EPSILON = .5
 
+def validateTriple(triple):
+	A, B, pi = triple
+	for row in A:
+		if abs(sum(row)-1.0) > .001:
+			 return False
+		for a in row:
+			if a < 0: return False
+	if abs(sum(pi)-1.0) > .001:
+		return False
+	return True
+
 def printAndFlush(string):
 	"""
 	Print a string and flush stdout.
@@ -80,7 +91,7 @@ def smythEmissionDistribution(pair):
 		B.append((mu, stddev))
 	return B
 
-def smythDefaultTriple(pair):
+def trainHMM(pair):
 	"""
 	Given a pair (S: list of sequences, target_m: int), initialize a
 	HMM triple with at most target_m states using Smyth's "default" method.
@@ -93,21 +104,27 @@ def smythDefaultTriple(pair):
 	@return: The HMM as a (A, B, pi) triple
 	"""
 	cluster, target_m = pair
-	B = smythEmissionDistribution(pair)
-	m_prime = len(B)
-	A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
-	pi = [1.0/m_prime] * m_prime
-	hmm = tripleToHMM((A, B, pi))
-	hmm.baumWelch(toSequenceSet(cluster))
-	A_p, B_p, pi_p = hmmToTriple(hmm)
-	# According to the GHMM mailing list, a very small standard deviation can
-	# cause underflow errors when attempting to compute log likelihood. We
-	# avoid this by placing a floor sigma >= .5. It's a little hacky, but given
-	# the very fuzzy nature of our training data (considering network latency,
-	# etc.), it's not unreasonable to assume that "uniform" measurements really
-	# should have some jitter.
-	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
-	return (A_p, B_p, pi_p)
+	hmm = None
+	while target_m > 1:
+		B = smythEmissionDistribution((cluster, target_m))
+		m_prime = len(B)
+		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
+		pi = [1.0/m_prime] * m_prime
+		hmm = tripleToHMM((A, B, pi))
+		hmm.baumWelch(toSequenceSet(cluster))
+		A_p, B_p, pi_p = hmmToTriple(hmm)
+		# According to the GHMM mailing list, a very small standard deviation
+		# can cause underflow errors when attempting to compute log likelihood.
+		# We avoid this by placing a floor sigma >= .5. It's a little hacky, but
+		# given the very fuzzy nature of our training data (considering network
+	  	# latency, etc.), it's not unreasonable to assume that "uniform"
+		# measurements really should have some jitter.
+		B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+		triple = (A_p, B_p, pi_p)
+		if validateTriple(triple):
+			return triple
+		target_m -= 1
+	raise ValueError("Couldn't construct a valid HMM! %s" % hmm)
 
 def randomDefaultTriple(pair):
 	pass
@@ -129,33 +146,9 @@ def symDistance(args):
 	hmm2 = tripleToHMM(triple2)
 	s1_m2 = hmm2.loglikelihood(toSequence(seq1))
 	s2_m1 = hmm1.loglikelihood(toSequence(seq2))
-	assert s1_m2 <= 0
-	assert s2_m1 <= 0
+	assert s1_m2 <= 0, ("s1_m2=%f" % s1_m2)
+	assert s2_m1 <= 0, ("s2_m1=%f" % s2_m1)
 	return (s1_m2 + s2_m1)/2.0
-
-def reestimated(pair):
-	"""
-	Perform Baum-Welch reestimation on a HMM triple with the sequences in S.
-	@param pair: a tuple (triple, S)
-	@return: the reestimated triple
-	"""
-	triple, S = pair
-	seqSet = toSequenceSet(S)
-	hmm = tripleToHMM(triple)
-	hmm.baumWelch(seqSet)
-	return hmmToTriple(hmm)
-
-def trainHMM(pair):
-	"""
-	Given a pair (m: int, S: list of sequences), train a HMM with at
-	most m states on S. The HMM is initialized with Smyth's default method,
-	then refined with Baum-Welch training.
-
-	@param item: A tuple (m: int, S: list of sequences)
-	@return: A triple (A, B, pi) representing the trained HMM
-	"""
-	cluster, m = pair
-	return reestimated((smythDefaultTriple(pair), cluster))
 
 def kMedoids(args):
 	"""
@@ -203,8 +196,10 @@ class HMMCluster():
 		self.labelings = {}
 		self.k_values = range(self.min_k, self.max_k+1)
 		self.init_hmms = []
-		self.pool = Pool(n_jobs)
 		self.times = {}
+		self.single_threaded = n_jobs == -1
+		if not self.single_threaded:
+			self.pool = Pool(n_jobs)
 
 	def _sanityCheck(self):
 		assert self.min_k <= self.max_k
@@ -219,17 +214,23 @@ class HMMCluster():
 				pair_2 = (self.S[j], self.init_hmms[j])
 				yield (pair_1, pair_2)
 
+	def _doMap(self, func, items):
+		if self.single_threaded:
+			return map(func, items)
+		else:
+			return self.pool.map(func, items)
+
 	def _getHMMDistMatrix(self):
 		"""
 		Compute the distance matrix using Rabiner's HMM distance measure.
 		"""
 		if self.hmm_init == 'smyth':
-			init_fn = smythDefaultTriple
+			init_fn = trainHMM
 		elif self.hmm_init == 'random':
 			init_fn = randomDefaultTriple
 		printAndFlush("Generating default HMMs (parallel)...")
 		start = clock()
-		self.init_hmms = self.pool.map(init_fn,
+		self.init_hmms = self._doMap(init_fn,
 			(([s], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
 		printAndFlush("done")
@@ -246,13 +247,13 @@ class HMMCluster():
 			printAndFlush("Items %i-%i" % (start, stop))
 			dist_batch = self._getHMMBatchItems()
 			mini_batch = islice(dist_batch, start, stop)
-			condensed += self.pool.map(symDistance, mini_batch)
+			condensed += self._doMap(symDistance, mini_batch)
 		self.times['distance_matrix'] = clock() - start
 		printAndFlush("done")
 		# log-likelihoods are <= 0, a distance function must be positive
 		shifted = map(lambda l: -1*l, condensed)
-		printAndFlush("Minimum distance: %i" % min(shifted))
-		printAndFlush("Maximum distance: %i" % max(shifted))
+		printAndFlush("Minimum distance: %f" % min(shifted))
+		printAndFlush("Maximum distance: %f" % max(shifted))
 		return array(shifted, float32)
 
 	def _getEditDistMatrix(self):
@@ -265,7 +266,7 @@ class HMMCluster():
 				dist_batch.append((self.S[i], self.S[j]))
 		printAndFlush("Computing distance matrix (parallel)...")
 		start = clock()
-		condensed = self.pool.map(levDistance, dist_batch)
+		condensed = self._doMap(levDistance, dist_batch)
 		self.times['distance_matrix'] = clock() - start
 		printAndFlush("done")
 		return condensed
@@ -313,7 +314,7 @@ class HMMCluster():
 		self.dist_matrix = self._getDistMatrix()
 		batch_items = ((self.dist_matrix, k, 10) for k in self.k_values)
 		printAndFlush("K-medoids clustering (parallel)...")
-		results = self.pool.map(kMedoids, batch_items)
+		results = self._doMap(kMedoids, batch_items)
 		printAndFlush("done")
 		for i in xrange(0, len(self.k_values)):
 			k, result = self.k_values[i], results[i]
@@ -357,7 +358,7 @@ class HMMCluster():
 			}
 		printAndFlush("Training components on clusters (parallel)...")
 		start = clock()
-		hmm_triples = self.pool.map(trainHMM, batch_items)
+		hmm_triples = self._doMap(trainHMM, batch_items)
 		self.times['modeling'] = clock() - start
 		printAndFlush("done")
 		idx = 0
@@ -386,7 +387,8 @@ class HMMCluster():
 		self._cluster()
 		self._trainModels()
 		self.times['total'] = clock() - start
-		self.pool.close()
+		if not self.single_threaded:
+			self.pool.close()
 
 if __name__ == "__main__":
 	print "Generating synthetic data...",
@@ -395,5 +397,5 @@ if __name__ == "__main__":
 	clust = HMMCluster(seqSetToList(seqSet), 2, 2, 2)
 	clust.model()
 	hmm = tripleToHMM(compositeTriple(clust.components[2]))
-	hmm.baumWelch(seqSet)
+	# hmm.baumWelch(seqSet)
 	print hmm

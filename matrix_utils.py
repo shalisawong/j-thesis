@@ -39,14 +39,14 @@ def blockDiagMatrix(matrices):
 	for matrix in matrices:
 		ydim += len(matrix)
 		xdim += len(matrix[0])
-	block_diag = array(uniformMatrix(xdim, ydim), npfloat)
+	block_diag = uniformMatrix(xdim, ydim)
 	x_offset = 0
 	y_offset = 0
 	for matrix in matrices:
 		ydim_m = len(matrix)
 		xdim_m = len(matrix[0])
-		for y in range(0, ydim_m,):
-			for x in range(0, xdim_m):
+		for y in xrange(0, ydim_m,):
+			for x in xrange(0, xdim_m):
 				block_diag[y+y_offset][x+x_offset] = matrix[y][x]
 
 		x_offset += xdim_m
