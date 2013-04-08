@@ -127,6 +127,7 @@ def do_summarize(records, direc_key):
 	median_cells_per_window_aggr = []
 	stddev_cells_per_window_aggr = []
 	inst_counts_aggr = []
+	unique_vals_aggr = []
 	for record in records:
 		relays = record[direc_key]
 		circ_len_aggr.append((record['destroy'] - record['create'])/1000.0)
@@ -136,56 +137,64 @@ def do_summarize(records, direc_key):
 		max_cells_per_window_aggr.append(max(relays))
 		stddev_cells_per_window_aggr.append(std(relays))
 		inst_counts_aggr += relays
+		unique_vals_aggr.append(len(set(relays)))
 	fig = plt.figure()
 
-	meansplot = fig.add_subplot(421)
+	meansplot = fig.add_subplot(431)
 	plt.title("Mean Cells/Window")
 	plt.xlabel("Mean Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	meansplot.hist(mean_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(422)
+	cellsplot = fig.add_subplot(432)
 	plt.title("Median Cells/Window")
 	plt.xlabel("Median Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(median_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	minsplot = fig.add_subplot(423)
+	minsplot = fig.add_subplot(433)
 	plt.title("Min Cells/Window")
 	plt.xlabel("Min Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	minsplot.hist(min_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	maxsplot = fig.add_subplot(424)
+	maxsplot = fig.add_subplot(434)
 	plt.title("Max Cells/Window")
 	plt.xlabel("Max Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	maxsplot.hist(max_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	stddevsplot = fig.add_subplot(425)
+	stddevsplot = fig.add_subplot(435)
 	plt.title("Std Dev. of Cells/Window")
 	plt.xlabel("Std Dev. of Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	stddevsplot.hist(stddev_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(426)
+	cellsplot = fig.add_subplot(436)
 	plt.title("Single Window Cell Count")
 	plt.xlabel("Single Window Cell Count")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(inst_counts_aggr, bins=N_HIST_BINS)
 
-	lenplot = fig.add_subplot(427)
+	lenplot = fig.add_subplot(437)
 	plt.title("Circuit Length (seconds)")
 	plt.xlabel("Circuit Length (seconds)")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	lenplot.hist(circ_len_aggr, bins=N_HIST_BINS)
+	fig.tight_layout()
+
+	uniqueplot = fig.add_subplot(438)
+	plt.title("Number of Unique Values")
+	plt.xlabel("Number of Unique Values")
+	plt.ylabel("Frequency")
+	uniqueplot.hist(unique_vals_aggr, bins=N_HIST_BINS)
 	fig.tight_layout()
 
 def do_horizon(records, direc_key, window_size):
@@ -208,7 +217,7 @@ def do_horizon(records, direc_key, window_size):
 		series = record[direc_key]
 		# use fill_between to avoid some rendering bugs
 		artist = ax.fill_between(range(0, len(series)), series, [0]*len(series),
-			alpha=.1, color='black', edgecolor='none', picker=True)
+			alpha=.2, color='black', edgecolor='none', picker=True)
 		artist_ident_map[record['ident']] = artist
 
 def do_timeplot(records, direc_key, window_size, ts_ident):
