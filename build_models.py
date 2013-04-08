@@ -36,8 +36,11 @@ def log_series(series):
 def preprocess(series):
 	return map(lambda s: log_series(trim_inactive(s)), series)
 
+def filter_criteria(series):
+	return len(series) > 1 and std(series) > 0
+
 def filter_processed(series):
-	return filter(lambda s: len(s) > 1 and std(s) > 0, series)
+	return filter(filter_criteria, series)
 
 if __name__ == "__main__":
 	logging.disable('warning')
