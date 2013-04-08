@@ -418,8 +418,7 @@ class HMMCluster():
 				self.components[k]['cluster_sizes'].append(cluster_size)
 				self.components[k]['seq_lens'].append(inclust_seq_lens)
 				idx += 1
-			composite = tripleToHMM(compositeTriple(self.components[k]))
-			self.composites[k] = hmmToTriple(composite)
+			self.composites[k] = compositeTriple(self.components[k])
 		print "done"
 
 	def model(self):

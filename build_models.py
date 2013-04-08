@@ -8,7 +8,7 @@ from os.path import isfile
 import sys, cPickle, logging, cProfile
 
 MIN_K = 3
-MAX_K = 20
+MAX_K = 50
 MIN_M = 3
 MAX_M = 10
 BETA = .5
@@ -37,7 +37,7 @@ def preprocess(series):
 	return map(lambda s: log_series(trim_inactive(s)), series)
 
 def filter_processed(series):
-	return filter(lambda s: len(s) > 2 and std(s) > 0, series)
+	return filter(lambda s: len(s) > 1 and std(s) > 0, series)
 
 if __name__ == "__main__":
 	logging.disable('warning')
@@ -57,8 +57,8 @@ if __name__ == "__main__":
 			rand_seed = first_seed + trial_num
 			print "** Trial %i of %i **" % (trial_num+1, N_TRIALS)
 			for target_m in xrange(MIN_M, MAX_M+1):
-				outpath = outdir + ("/smyth_out_m%i_trial_%i.pickle" %
-					(target_m, trial_num))
+				outpath = outdir + ("/smyth_out_m%i_seed_%i.pickle" %
+					(target_m, rand_seed))
 				if not isfile(outpath):
 					print "## Target m = %i ##" % target_m
 					train, test = train_test_split(filtered, train_size=BETA,
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 						continue
 					trial = {
 						'components': smyth_out.components,
-						'composites': smyth_out.composites,
+						# 'composites': smyth_out.composites,
 						# 'init_hmms': smyth_out.init_hmms,
 						# 'dist_matrix': smyth_out.dist_matrix,
 						'times': smyth_out.times,
@@ -87,4 +87,7 @@ if __name__ == "__main__":
 						'target_m': target_m
 					}
 					with open(outpath, 'w') as outfile:
+						print "Dumping results to %s" % outpath
 						cPickle.dump(trial, outfile)
+				else:
+					print "*** Results file %s already exists!" % outpath

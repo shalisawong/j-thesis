@@ -34,7 +34,6 @@ def get_distr(seq_lens):
 	return distr
 
 if __name__ == "__main__":
-	seed(3)
 	filepath = sys.argv[1]
 	outpath = sys.argv[2]
 	k = int(sys.argv[3])
