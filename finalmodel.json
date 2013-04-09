@@ -1,0 +1,12 @@
+{
+	"inpath": "/home/japplebaum/data/clientlog-2013-21-2-w5000.pickle",
+	"outdir": "final_model",
+	"first_seed": 0,
+	"n_jobs": null,
+	"min_k": 47,
+	"max_k": 47,
+	"min_m": 6,
+	"max_m": 6,
+	"beta": 0.01,
+	"n_trials": 1
+}

@@ -1,0 +1,12 @@
+{
+	"inpath": "/home/japplebaum/data/clientlog-2013-21-2-w5000.pickle",
+	"outdir": "cluster_results",
+	"first_seed": 0,
+	"n_jobs": null,
+	"min_k": 3,
+	"max_k": 50,
+	"min_m": 3,
+	"max_m": 10,
+	"beta": 0.5,
+	"n_trials": 20
+}
