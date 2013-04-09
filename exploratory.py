@@ -18,6 +18,7 @@ from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 from matplotlib.patches import Rectangle
 from sklearn.cluster import k_means
 from pprint import pprint
+from sequence_utils import trim_inactive
 import matplotlib.pyplot as plt
 import sys, cPickle, subprocess, random
 
@@ -128,6 +129,7 @@ def do_summarize(records, direc_key):
 	stddev_cells_per_window_aggr = []
 	inst_counts_aggr = []
 	unique_vals_aggr = []
+	percent_active_aggr = []
 	for record in records:
 		relays = record[direc_key]
 		circ_len_aggr.append((record['destroy'] - record['create'])/1000.0)
@@ -137,64 +139,71 @@ def do_summarize(records, direc_key):
 		max_cells_per_window_aggr.append(max(relays))
 		stddev_cells_per_window_aggr.append(std(relays))
 		inst_counts_aggr += relays
-		unique_vals_aggr.append(len(set(relays)))
+		unique_vals_aggr.append(len(set(filter(lambda o: o > 2, relays))))
+		time_active = len(trim_inactive(relays))
+		percent_active_aggr.append(100.0*time_active/len(relays))
 	fig = plt.figure()
 
-	meansplot = fig.add_subplot(431)
+	meansplot = fig.add_subplot(331)
 	plt.title("Mean Cells/Window")
 	plt.xlabel("Mean Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	meansplot.hist(mean_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(432)
+	cellsplot = fig.add_subplot(332)
 	plt.title("Median Cells/Window")
 	plt.xlabel("Median Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(median_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	minsplot = fig.add_subplot(433)
+	minsplot = fig.add_subplot(333)
 	plt.title("Min Cells/Window")
 	plt.xlabel("Min Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	minsplot.hist(min_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	maxsplot = fig.add_subplot(434)
+	maxsplot = fig.add_subplot(334)
 	plt.title("Max Cells/Window")
 	plt.xlabel("Max Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	maxsplot.hist(max_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	stddevsplot = fig.add_subplot(435)
+	stddevsplot = fig.add_subplot(335)
 	plt.title("Std Dev. of Cells/Window")
 	plt.xlabel("Std Dev. of Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	stddevsplot.hist(stddev_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(436)
+	cellsplot = fig.add_subplot(336)
 	plt.title("Single Window Cell Count")
 	plt.xlabel("Single Window Cell Count")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(inst_counts_aggr, bins=N_HIST_BINS)
 
-	lenplot = fig.add_subplot(437)
+	lenplot = fig.add_subplot(337)
 	plt.title("Circuit Length (seconds)")
 	plt.xlabel("Circuit Length (seconds)")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	lenplot.hist(circ_len_aggr, bins=N_HIST_BINS)
-	fig.tight_layout()
 
-	uniqueplot = fig.add_subplot(438)
-	plt.title("Number of Unique Values")
-	plt.xlabel("Number of Unique Values")
+	uniqueplot = fig.add_subplot(338)
+	plt.title("Number of Unique Values > 1")
+	plt.xlabel("Number of Unique Values > 1")
 	plt.ylabel("Frequency")
 	uniqueplot.hist(unique_vals_aggr, bins=N_HIST_BINS)
+
+	timeactiveplot = fig.add_subplot(339)
+	plt.title("Percent of Time in Active State")
+	plt.xlabel("Percent of Time")
+	plt.ylabel("Frequency")
+	timeactiveplot.hist(percent_active_aggr, bins=N_HIST_BINS)
 	fig.tight_layout()
 
 def do_horizon(records, direc_key, window_size):

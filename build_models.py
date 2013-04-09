@@ -1,6 +1,7 @@
 from sklearn.cross_validation import train_test_split
 from numpy import std, mean
 from smyth import HMMCluster
+from sequence_utils import trim_inactive
 from math import log
 from traceback import print_exc
 from pprint import pprint
@@ -13,22 +14,6 @@ MIN_M = 3
 MAX_M = 10
 BETA = .5
 N_TRIALS = 20
-
-def trim_inactive(series):
-	tail = len(series)
-	lead_idx = 0
-	trail_idx = tail
-	found_nonzero = False
-	for idx, obs in enumerate(series):
-		if obs < 2:
-			if trail_idx == tail:
-				trail_idx = idx
-			if not found_nonzero:
-				lead_idx = idx+1
-		else:
-			trail_idx = tail
-			found_nonzero = True
-	return series[lead_idx:trail_idx]
 
 def log_series(series):
 	return map(lambda o: log(1+o), series)
