@@ -130,80 +130,84 @@ def do_summarize(records, direc_key):
 	inst_counts_aggr = []
 	unique_vals_aggr = []
 	percent_active_aggr = []
+	time_active_aggr = []
 	for record in records:
-		relays = record[direc_key]
-		circ_len_aggr.append((record['destroy'] - record['create'])/1000.0)
-		mean_cells_per_window_aggr.append(1.0*sum(relays)/len(relays))
-		median_cells_per_window_aggr.append(median(relays))
-		min_cells_per_window_aggr.append(min(relays))
-		max_cells_per_window_aggr.append(max(relays))
-		stddev_cells_per_window_aggr.append(std(relays))
-		inst_counts_aggr += relays
-		unique_vals_aggr.append(len(set(filter(lambda o: o > 2, relays))))
-		time_active = len(trim_inactive(relays))
-		percent_active_aggr.append(100.0*time_active/len(relays))
+		relays = trim_inactive(record[direc_key])
+		if len(relays) > 0:
+			circ_len_aggr.append((record['destroy'] - record['create'])/1000.0)
+			mean_cells_per_window_aggr.append(1.0*sum(relays)/len(relays))
+			median_cells_per_window_aggr.append(median(relays))
+			min_cells_per_window_aggr.append(min(relays))
+			max_cells_per_window_aggr.append(max(relays))
+			stddev_cells_per_window_aggr.append(std(relays))
+			inst_counts_aggr += relays
+			# unique_vals_aggr.append(len(set(filter(lambda o: o > 2, relays))))
+			# time_active = len(trim_inactive(relays))
+			# percent_active_aggr.append(100.0*time_active/len(relays))
+			# time_active_aggr.append(time_active)
+	print "%i series after preprocessing" % len(mean_cells_per_window_aggr)
 	fig = plt.figure()
 
-	meansplot = fig.add_subplot(331)
+	meansplot = fig.add_subplot(421)
 	plt.title("Mean Cells/Window")
 	plt.xlabel("Mean Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	meansplot.hist(mean_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(332)
+	cellsplot = fig.add_subplot(422)
 	plt.title("Median Cells/Window")
 	plt.xlabel("Median Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(median_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	minsplot = fig.add_subplot(333)
+	minsplot = fig.add_subplot(423)
 	plt.title("Min Cells/Window")
 	plt.xlabel("Min Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	minsplot.hist(min_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	maxsplot = fig.add_subplot(334)
+	maxsplot = fig.add_subplot(424)
 	plt.title("Max Cells/Window")
 	plt.xlabel("Max Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	maxsplot.hist(max_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	stddevsplot = fig.add_subplot(335)
+	stddevsplot = fig.add_subplot(425)
 	plt.title("Std Dev. of Cells/Window")
 	plt.xlabel("Std Dev. of Cells/Window")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	stddevsplot.hist(stddev_cells_per_window_aggr, bins=N_HIST_BINS)
 
-	cellsplot = fig.add_subplot(336)
+	cellsplot = fig.add_subplot(426)
 	plt.title("Single Window Cell Count")
 	plt.xlabel("Single Window Cell Count")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	cellsplot.hist(inst_counts_aggr, bins=N_HIST_BINS)
 
-	lenplot = fig.add_subplot(337)
+	lenplot = fig.add_subplot(427)
 	plt.title("Circuit Length (seconds)")
 	plt.xlabel("Circuit Length (seconds)")
 	plt.ylabel("Frequency")
 	plt.yscale('log')
 	lenplot.hist(circ_len_aggr, bins=N_HIST_BINS)
 
-	uniqueplot = fig.add_subplot(338)
-	plt.title("Number of Unique Values > 1")
-	plt.xlabel("Number of Unique Values > 1")
-	plt.ylabel("Frequency")
-	uniqueplot.hist(unique_vals_aggr, bins=N_HIST_BINS)
+	# uniqueplot = fig.add_subplot(338)
+	# plt.title("Number of Unique Values > 1")
+	# plt.xlabel("Number of Unique Values > 1")
+	# plt.ylabel("Frequency")
+	# uniqueplot.hist(unique_vals_aggr, bins=N_HIST_BINS)
 
-	timeactiveplot = fig.add_subplot(339)
-	plt.title("Percent of Time in Active State")
-	plt.xlabel("Percent of Time")
-	plt.ylabel("Frequency")
-	timeactiveplot.hist(percent_active_aggr, bins=N_HIST_BINS)
+	# timeactiveplot = fig.add_subplot(339)
+	# plt.title("Percent of Time in Active State")
+	# plt.xlabel("Percent of Time")
+	# plt.ylabel("Frequency")
+	# timeactiveplot.hist(percent_active_aggr, bins=N_HIST_BINS)
 	fig.tight_layout()
 
 def do_horizon(records, direc_key, window_size):
@@ -315,7 +319,7 @@ if __name__ == "__main__":
 		print "Reading data..."
 		data = cPickle.load(data_file)
 		window_size, records = data['window_size'], data['records']
-		print "%i circuits" % len(records)
+		print "%i series" % len(records)
 		print "Graphing..."
 		if graphing_mode == '-summarize':
 			do_summarize(records, direc_key)
