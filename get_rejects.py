@@ -18,13 +18,12 @@ if __name__ == "__main__":
 		for idx, series in enumerate(preprocessed):
 			if not filter_criteria(series) and len(series) > 0:
 				orig_record = orig_records[idx]
-				trimmed_out = trim_inactive(orig_record['relays_out'])
 				rej_record = {
 					'ident': orig_record['ident'],
 					'create': orig_record['create'],
 					'destroy': orig_record['destroy'],
-					'relays_in': [],
-					'relays_out': trimmed_out
+					'relays_in': orig_record['relays_in'],
+					'relays_out': orig_record['relays_out']
 				}
 				reject_data['records'].append(rej_record)
 		with open(outpath, 'w') as outfile:
