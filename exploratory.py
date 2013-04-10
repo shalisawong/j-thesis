@@ -142,11 +142,13 @@ def do_summarize(records, direc_key):
 			stddev_cells_per_window_aggr.append(std(relays))
 			inst_counts_aggr += relays
 			# unique_vals_aggr.append(len(set(filter(lambda o: o > 2, relays))))
-			# time_active = len(trim_inactive(relays))
-			# percent_active_aggr.append(100.0*time_active/len(relays))
+			time_active = len(trim_inactive(relays))
+			percent_active_aggr.append(100.0*time_active/len(relays))
 			# time_active_aggr.append(time_active)
 	print "%i series after preprocessing" % len(mean_cells_per_window_aggr)
 	fig = plt.figure()
+	print min(percent_active_aggr), "***"
+	print max(percent_active_aggr), "***"
 
 	meansplot = fig.add_subplot(421)
 	plt.title("Mean Cells/Window")
@@ -203,11 +205,11 @@ def do_summarize(records, direc_key):
 	# plt.ylabel("Frequency")
 	# uniqueplot.hist(unique_vals_aggr, bins=N_HIST_BINS)
 
-	# timeactiveplot = fig.add_subplot(339)
-	# plt.title("Percent of Time in Active State")
-	# plt.xlabel("Percent of Time")
-	# plt.ylabel("Frequency")
-	# timeactiveplot.hist(percent_active_aggr, bins=N_HIST_BINS)
+	timeactiveplot = fig.add_subplot(428)
+	plt.title("Percent of Time in Active State")
+	plt.xlabel("Percent of Time")
+	plt.ylabel("Frequency")
+	timeactiveplot.hist(percent_active_aggr, bins=N_HIST_BINS)
 	fig.tight_layout()
 
 def do_horizon(records, direc_key, window_size):
