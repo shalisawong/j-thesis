@@ -7,7 +7,7 @@ from pprint import pprint
 from bisect import bisect_left
 import sys, cPickle
 
-N = 3000
+N = 2000
 WINDOW_SIZE = 5000
 
 def idx_chooser(distribution):
@@ -37,6 +37,7 @@ if __name__ == "__main__":
 	filepath = sys.argv[1]
 	outpath = sys.argv[2]
 	k = int(sys.argv[3])
+	# idx_fixed = int(sys.argv[4])
 	with open(filepath) as resultsfile:
 		results = cPickle.load(resultsfile)
 		mixture = results['components'][k]

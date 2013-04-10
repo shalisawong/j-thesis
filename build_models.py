@@ -6,6 +6,7 @@ from math import log
 from traceback import print_exc
 from pprint import pprint
 from os.path import isfile
+from random import uniform
 import sys, cPickle, logging, json
 
 def log_series(series):
@@ -15,7 +16,7 @@ def preprocess(series):
 	return map(lambda s: log_series(trim_inactive(s)), series)
 
 def filter_criteria(series):
-	return len(series) > 1 and std(series) > 0
+	return len(series) > 0 and std(series) > 0
 
 def filter_processed(series):
 	return filter(filter_criteria, series)
@@ -25,7 +26,6 @@ if __name__ == "__main__":
 	cfg_path = sys.argv[1]
 	with open(cfg_path) as cfg_file:
 		cfg = json.load(cfg_file)
-		pprint(cfg)
 	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
 	out_series = [record['relays_out'] for record in records]

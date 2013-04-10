@@ -20,7 +20,7 @@ from cluster_utils import partition
 from sequence_utils import *
 from hmm_utils import *
 from matrix_utils import uniformMatrix
-from levenshtein import levDistance
+# from levenshtein import levDistance
 from pprint import pprint
 from math import isnan
 from multiprocessing import Pool
@@ -131,18 +131,18 @@ def trainHMM(pair):
 	B, labels, has_zero = smythEmissionDistribution((cluster, target_m))
 	m_prime = len(B)
 	pi = [1.0/m_prime] * m_prime
-	if not has_zero:
+	if not has_zero or len(cluster) > 1:
 		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
 		hmm = tripleToHMM((A, B, pi))
 		hmm.baumWelch(toSequenceSet(cluster))
 		A_p, B_p, pi_p = hmmToTriple(hmm)
 	else:
 		# If we have a state with zero standard deviation, Baum Welch dies on
-		# a continuous HMM dies with overflow errors. To fix this, we replace
-		# each observation with its cluster label, then train a Discrete Markov
+		# a continuous HMM with overflow errors. To fix this, we replace each
+		# observation with its cluster label, then train a Discrete Markov
 		# Model on these sequences. We don't get to reestimate B at all, but
-		# we do get to reestimate the dynamics. The B produced by the clustering
-		# step has been pretty robust in simulation studies.
+		# we do get to reestimate the dynamics. This heuristic is only
+		# employed for single element clusters.
 		hmm = discreteDefaultDMM(min(labels), max(labels))
 		seq_lens = [len(seq) for seq in cluster]
 		offset = 0
@@ -165,7 +165,8 @@ def trainHMM(pair):
   	# latency, etc.), it's not unreasonable to assume that "uniform"
 	# measurements could have some jitter. Any extra variance added to the
 	# cluster can always be corrected away with another round of Baum Welch.
-	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+	if len(cluster) == 1:
+		B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
 	triple = (A_p, B_p, pi_p)
 	if validateTriple(triple):
 		return triple
@@ -192,6 +193,8 @@ def symDistance(args):
 	hmm2 = tripleToHMM(triple2)
 	s1_m2 = hmm2.loglikelihood(toSequence(seq1))
 	s2_m1 = hmm1.loglikelihood(toSequence(seq2))
+	if s1_m2 > 0:
+		print seq1, hmm2
 	assert s1_m2 <= 0, ("s1_m2=%f" % s1_m2)
 	assert s2_m1 <= 0, ("s2_m1=%f" % s2_m1)
 	return (s1_m2 + s2_m1)/2.0
@@ -302,20 +305,20 @@ class HMMCluster():
 		printAndFlush("Maximum distance: %f" % max(shifted))
 		return array(shifted, float32)
 
-	def _getEditDistMatrix(self):
-		"""
-		Compute the distance matrix using edit distance between sequences.
-		"""
-		dist_batch = []
-		for i in xrange(0, self.n):
-			for j in xrange(1+i, self.n):
-				dist_batch.append((self.S[i], self.S[j]))
-		printAndFlush("Computing distance matrix (parallel)...")
-		start = clock()
-		condensed = self._doMap(levDistance, dist_batch)
-		self.times['distance_matrix'] = clock() - start
-		printAndFlush("done")
-		return condensed
+	# def _getEditDistMatrix(self):
+	# 	"""
+	# 	Compute the distance matrix using edit distance between sequences.
+	# 	"""
+	# 	dist_batch = []
+	# 	for i in xrange(0, self.n):
+	# 		for j in xrange(1+i, self.n):
+	# 			dist_batch.append((self.S[i], self.S[j]))
+	# 	printAndFlush("Computing distance matrix (parallel)...")
+	# 	start = clock()
+	# 	condensed = self._doMap(levDistance, dist_batch)
+	# 	self.times['distance_matrix'] = clock() - start
+	# 	printAndFlush("done")
+	# 	return condensed
 
 	def _getDistMatrix(self):
 		"""
