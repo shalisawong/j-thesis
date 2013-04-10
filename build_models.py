@@ -26,7 +26,7 @@ if __name__ == "__main__":
 	with open(cfg_path) as cfg_file:
 		cfg = json.load(cfg_file)
 		pprint(cfg)
-	with open(inpath) as datafile:
+	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
 	out_series = [record['relays_out'] for record in records]
 	preprocessed = preprocess(out_series)
@@ -34,14 +34,17 @@ if __name__ == "__main__":
 	print "%i series after preprocessing" % len(filtered)
 	for trial_num in xrange(0, cfg['n_trials']):
 		rand_seed = cfg['first_seed'] + trial_num
-		print "** Trial %i of %i **" % (trial_num+1, N_TRIALS)
+		print "** Trial %i of %i **" % (trial_num+1, cfg['n_trials'])
 		for target_m in xrange(cfg['min_m'], cfg['max_m']+1):
 			outpath = cfg['outdir'] + ("/smyth_out_m%i_seed_%i.pickle" %
 				(target_m, rand_seed))
 			if not isfile(outpath):
 				print "## Target m = %i ##" % target_m
-				train, test = train_test_split(filtered, train_size=cfg['beta'],
-					random_state=rand_seed)
+				if cfg['beta'] < 1:
+					train, test = train_test_split(filtered,
+						train_size=cfg['beta'], random_state=rand_seed)
+				else:
+					train = filtered
 				print "Training on %i time series" % len(train)
 				smyth_out = HMMCluster(train, target_m, cfg['min_k'],
 					cfg['max_k'], 'hmm', 'smyth', 'hierarchical', cfg['n_jobs'])
@@ -60,9 +63,9 @@ if __name__ == "__main__":
 					'times': smyth_out.times,
 					'labelings': smyth_out.labelings,
 					'rand_seed': rand_seed,
-					'beta': BETA,
-					'min_k': MIN_K,
-					'max_k': MAX_K,
+					'beta': cfg['beta'],
+					'min_k': cfg['min_k'],
+					'max_k': cfg['max_k'],
 					'target_m': target_m
 				}
 				with open(outpath, 'w') as outfile:
