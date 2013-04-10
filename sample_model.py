@@ -64,4 +64,3 @@ if __name__ == "__main__":
 		}
 		with open(outpath, 'w') as outfile:
 			cPickle.dump(output, outfile)
-
