@@ -137,6 +137,8 @@ def trainHMM(pair):
 		hmm.baumWelch(toSequenceSet(cluster))
 		A_p, B_p, pi_p = hmmToTriple(hmm)
 	else:
+		print "DISCRETE!"
+		assert 0 == 1
 		# If we have a state with zero standard deviation, Baum Welch dies on
 		# a continuous HMM with overflow errors. To fix this, we replace each
 		# observation with its cluster label, then train a Discrete Markov
@@ -352,7 +354,7 @@ class HMMCluster():
 			if len(clusters) != k:
 				raise ValueError("fcluster could only produce %i clusters!" %
 					len(clusters))
-			self.partitions[k] = (clusters)
+			self.partitions[k] = clusters
 		printAndFlush("done")
 
 	def _kMedoids(self):
@@ -440,10 +442,11 @@ class HMMCluster():
 
 if __name__ == "__main__":
 	print "Generating synthetic data...",
-	seqSet = smyth_example(Ns=(100, 20), lengths=(200, 200), seed=9)
+	seqSet = smyth_example(Ns=(50, 200), lengths=(200, 200), seed=9)
 	print "done"
 	clust = HMMCluster(seqSetToList(seqSet), 2, 2, 2)
 	clust.model()
 	hmm = tripleToHMM(compositeTriple(clust.components[2]))
+	print hmm
 	hmm.baumWelch(seqSet)
 	print hmm

@@ -6,7 +6,6 @@ from math import log
 from traceback import print_exc
 from pprint import pprint
 from os.path import isfile
-from random import uniform
 import sys, cPickle, logging, json
 
 def log_series(series):

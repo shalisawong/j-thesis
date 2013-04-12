@@ -1,6 +1,6 @@
 from numpy import std
 from sequence_utils import trim_inactive
-from build_models import filter_criteria
+from build_models import filter_criteria, log_series
 import sys, cPickle
 
 if __name__ == "__main__":
@@ -22,7 +22,7 @@ if __name__ == "__main__":
 				'relays_in': None,
 				'relays_out': trimmed,
 			}
-			if filter_criteria(trimmed):
+			if filter_criteria(log_series(trimmed)):
 				good_records.append(new_rec)
 			elif len(trimmed) > 0:
 				rej_records.append(new_rec)

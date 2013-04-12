@@ -45,7 +45,7 @@ def flatten(lists):
 	"""
 	Flatten a list of lists
 	@param lists: An iterable of lists, eg. [[1, 2, 3], [4, 5, 6]]
-	@return: The flattend list, eg. [1, 2, 3, 4, 5, 6]
+	@return: The flattened list, eg. [1, 2, 3, 4, 5, 6]
 	"""
 	return reduce(list.__add__, lists, [])
 

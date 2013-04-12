@@ -1,13 +1,15 @@
 from hmm_utils import tripleToHMM, compositeTriple
 from sequence_utils import seqSetToList
+from cluster_utils import partition
 from numpy import histogram
 from math import exp
-from random import random, randint, seed
+from random import random, randint, seed, sample
 from pprint import pprint
 from bisect import bisect_left
 import sys, cPickle
 
-N = 2000
+N = 100
+LEN = 100
 WINDOW_SIZE = 5000
 
 def idx_chooser(distribution):
@@ -19,6 +21,10 @@ def idx_chooser(distribution):
 	return lambda: bisect_left(thresholds, random(), hi=len(thresholds)-2)-1
 
 def get_distr(seq_lens):
+	"""
+	My attempt at sampling from an empirical distribution. This hasn't
+	been well tested, so it's currently being used.
+	"""
 	n_bins = 5000
 	hist = histogram(seq_lens, bins=n_bins)
 	pairs = filter(lambda p: p[0] > 0, zip(*hist))
@@ -34,34 +40,51 @@ def get_distr(seq_lens):
 	return distr
 
 if __name__ == "__main__":
-	filepath = sys.argv[1]
-	outpath = sys.argv[2]
+	mode = sys.argv[1]
+	results_path = sys.argv[2]
 	k = int(sys.argv[3])
-	# idx_fixed = int(sys.argv[4])
-	with open(filepath) as resultsfile:
+	out_path = sys.argv[4]
+	records = []
+	with open(results_path) as resultsfile:
 		results = cPickle.load(resultsfile)
+	if mode == "-synthetic":
+		# model_idx = idx_chooser(mixture['cluster_sizes'])
 		mixture = results['components'][k]
-		models = map(tripleToHMM, mixture['hmm_triples'])
-		model_idx = idx_chooser(mixture['cluster_sizes'])
 		len_distrs = map(get_distr, mixture['seq_lens'])
 		records = []
-		for i in xrange(0, N):
-			idx = model_idx()
-			model = models[idx]
-			seq_len = len_distrs[idx]()
-			seq = list(model.sampleSingle(seq_len, seed=i))
-			create = 0
-			destroy = seq_len*WINDOW_SIZE
-			records.append({
-				'ident': (i, i),
-				'create': create,
-				'destroy': destroy,
-				'relays_in': [],
-				'relays_out': map(lambda o: max(0, exp(o)-1), seq)
-			})
-		output = {
-			'window_size': WINDOW_SIZE,
-			'records': records
-		}
-		with open(outpath, 'w') as outfile:
-			cPickle.dump(output, outfile)
+		models = map(tripleToHMM, mixture['hmm_triples'])
+		for i, model in enumerate(models):
+			sz = mixture['cluster_sizes'][i]
+			for j in xrange(0, sz):
+				seq_len = len_distrs[i]()
+				seq = list(model.sampleSingle(LEN, seed=j))
+				create = 0
+				destroy = LEN*WINDOW_SIZE
+				records.append({
+					'ident': (i, i),
+					'create': create,
+					'destroy': destroy,
+					'relays_in': [],
+					'relays_out': map(lambda o: max(0, exp(o)-1), seq)
+				})
+	elif mode == "-clusters":
+		data_path = sys.argv[5]
+		with open(data_path) as data_file:
+			orig_records = cPickle.load(data_file)['records']
+		labels = results['labelings'][k]
+		clusters = partition(orig_records, labels)
+		sampled = map(lambda c: sample(c, 100) if len(c) > 100 else c, clusters)
+		for i, cluster in enumerate(sampled):
+			for record in cluster:
+				record['ident'] = (i, i)
+				records.append(record)
+		for record in records:
+			if record['ident'] == (6, 6):
+				print len(record['relays_out'])
+
+	output = {
+		'window_size': WINDOW_SIZE,
+		'records': records
+	}
+	with open(out_path, 'w') as outfile:
+		cPickle.dump(output, outfile, protocol=2)
