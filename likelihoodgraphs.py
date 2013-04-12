@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import sys, cPickle
 
 # Ignore very high ks when computing the best m since they're likely
-# overfitted.
+# to be overfitted.
 MAX_K = 20
 
 def conf_inter(sigma, n):
@@ -27,6 +27,7 @@ if __name__ == "__main__":
 		km_means, km_trials = {}, {}
 		sfc_zs = uniformMatrix(len(ms), len(ks))
 		best_mean = float("-inf")
+		global_best = float("-inf")
 		best_m, best_k = None, None
 		best_m_means, best_m_confs = [], []
 		k_diffs = []
@@ -41,10 +42,11 @@ if __name__ == "__main__":
 			for m in ms:
 				mean_l = km_means[(k, m)]
 				sfc_zs[m-min(ms),k-min(ks)] = mean_l
-				if mean_l > best_mean and k < MAX_K:
+				if mean_l > best_mean and k == 7:
 					best_mean = mean_l
 					best_k = k
 					best_m = m
+				global_best = max(mean_l, global_best)
 		for k in ks:
 			trials = km_trials[(k, best_m)]
 			best_m_means.append(mean(trials))
@@ -56,6 +58,9 @@ if __name__ == "__main__":
 		print "*** Best Parameters"
 		print "*** k=%i, m=%i" % (best_k, best_m)
 		print "*** (%i trials)" % n_trials
+		print "*** Local best = %f" % best_mean
+		print "*** Global best = %f" % global_best
+		print "*** %% difference = %f" % ((best_mean - global_best)/global_best)
 		print "*******************"
 		fig = plt.figure()
 		if mode == "-flat":
@@ -64,6 +69,7 @@ if __name__ == "__main__":
 			plt.xlabel("k")
 			plt.ylabel("Log Likelilihood")
 			bestmplot.bar(ks, best_m_means, 1, color='y', yerr=best_m_confs)
+			# bestmplot.plot(ks, best_m_means)
 			kdiffplot = fig.add_subplot(212)
 			plt.title("%% Change in Log Likelihood vs. k (Target m=%i)" % best_m)
 			plt.xlabel("k")
@@ -72,6 +78,9 @@ if __name__ == "__main__":
 			fig.tight_layout()
 		elif mode == "-surface":
 			ax = fig.add_subplot(111)
+			plt.title("Mean Log Likelihood vs. k and m (22 trials)")
+			plt.xlabel("k")
+			plt.ylabel("m")
 			im = plt.imshow(sfc_zs, extent=[min(ks), max(ks), max(ms), min(ms)],
 				cmap=cm.coolwarm)
 			plt.xticks(filter(lambda k: k%5==0, ks))
