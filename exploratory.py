@@ -21,11 +21,15 @@ from pprint import pprint
 from math import sqrt
 from sequence_utils import trim_inactive, flatten
 import matplotlib.pyplot as plt
+from matplotlib import cm
+import pylab
 import sys, cPickle, subprocess, random
 from glob import glob
 
 N_HIST_BINS = 100
 N_CLUSTERS = 6
+VMAX = 700
+MAX_OBS = 1500
 artist_ident_map = {}
 
 def draw_sample(data, n=1000):
@@ -90,7 +94,7 @@ def summarize(values, name):
 	print "Std Dev:", std(values)
 	print "*" * border_len, "\n"
 
-def discretize(relay_series, k):
+def discretize(relay_series):
 	"""
 	Cluster the observations in relay_series into k bins, and replace each
 	observation with its cluster label.
@@ -104,8 +108,6 @@ def discretize(relay_series, k):
 	cluster_mins = [float("inf") for i in xrange(0, k)]
 	all_window_counts = reduce(list.__add__, relay_series, [])
 	vectorized = [[o] for o in all_window_counts]
-	print "Clustering observations into discrete bins..."
-	centroids, labels, inertia = k_means(vectorized, k, n_jobs=-1)
 	idx = 0
 	for series in relay_series:
 		for i in xrange(0, len(series)):
@@ -148,6 +150,7 @@ def do_summarize(records, direc_key):
 		percent_active_aggr.append(100.0*time_active/len(relays))
 		# time_active_aggr.append(time_active)
 	fig = plt.figure()
+	summarize(max_cells_per_window_aggr, "Max")
 
 	meansplot = fig.add_subplot(421)
 	plt.title("Mean Cells/Window")
@@ -211,7 +214,7 @@ def do_summarize(records, direc_key):
 	# timeactiveplot.hist(percent_active_aggr, bins=N_HIST_BINS)
 	fig.tight_layout()
 
-def do_horizon(records, direc_key, window_size):
+def do_horizon(records, direc_key, window_size, ylim=None):
 	"""
 	Display a horizon plot for a size 1000 random sample of records
 	@param records: the circuit records
@@ -223,17 +226,18 @@ def do_horizon(records, direc_key, window_size):
 	fig = plt.figure()
 	fig.canvas.mpl_connect('pick_event', on_pick)
 	ax = fig.add_subplot(111)
-	plt.title("Horizon Chart (n=%i)" % len(sample))
+	plt.title("Horizon Plot (n=%i)" % len(sample))
 	plt.xlabel("Window # (%i ms windows)" % window_size)
 	plt.ylabel("Outgoing Relay Cells/Window")
 	plt.grid(True)
 	for record in sample:
 		series = record[direc_key]
-		print max(series)
 		# use fill_between to avoid some rendering bugs
 		artist = ax.fill_between(range(0, len(series)), series, [0]*len(series),
 			alpha=.2, color='black', edgecolor='none', picker=True)
 		artist_ident_map[record['ident']] = artist
+	if ylim is not None:
+		pylab.ylim([0, ylim])
 
 def do_timeplot(records, direc_key, window_size, ts_ident):
 	"""
@@ -259,7 +263,7 @@ def do_timeplot(records, direc_key, window_size, ts_ident):
 			# acorr_plot(series, acorrplot)
 
 def do_colorplot(records, direc_key, window_size, ax=None, no_chrome=False,
-	cluster_ranges=None):
+	sample_size=1000):
 	"""
 	Display a color plots for a size 1000 random sample of records
 	@param records: the circuit records
@@ -270,68 +274,45 @@ def do_colorplot(records, direc_key, window_size, ax=None, no_chrome=False,
 	def rec_cmp(rec_1, rec_2):
 		relays_1, relays_2 = rec_1[direc_key], rec_2[direc_key]
 		m_r1, m_r2= mean(relays_1), mean(relays_2)
-		if m_r1 == m_r2: return 0
-		elif m_r1 > m_r2: return 1
-		else: return -1
-		# if len(relays_1) == len(relays_2): return 0
-		# elif len(relays_1) > len(relays_2): return 1
-		# else: return -1
-
-	sample = draw_sample(records)
+		if len(relays_1) == len(relays_2):
+			if m_r1 == m_r2: return 0
+			elif m_r1 > m_r2: return 1
+			else: return -1
+		elif len(relays_1) > len(relays_2):
+			return 1
+		else:
+			return -1
+	sample = draw_sample(records, sample_size)
 	sample.sort(cmp=rec_cmp)
 	N_CLUSTERS = 6
 	colors =[(1.0*i/N_CLUSTERS,)*3 for i in xrange(1, N_CLUSTERS+1)]
 	cmap = ListedColormap(colors)
 	relay_series = [record[direc_key] for record in sample]
-	if cluster_ranges is None:
-		discretized, cluster_ranges = discretize(relay_series, N_CLUSTERS)
 	vmin = 0
-	vmax = N_CLUSTERS
+	vmax = VMAX
 	if ax is None:
 		fig = plt.figure()
 		fig.canvas.mpl_connect('pick_event', on_pick)
 		ax = fig.add_subplot(111)
 		ax.get_yaxis().set_ticks([])
 	if not no_chrome:
-		plt.title("Color Plots (n=%i)" % len(sample))
+		plt.title("Luminance Plot (n=%i)" % len(sample))
 		plt.xlabel("Window # (%i ms windows)" % window_size)
 		plt.ylabel("Client")
-		legend_rects = [Rectangle((0, 0), 1, 1, fc=c) for c in reversed(colors)]
-		legend_labels = ["%i-%i cells" % c for c in reversed(cluster_ranges)]
-		plt.legend(legend_rects, legend_labels, loc=4)
+		# legend_rects = [Rectangle((0, 0), 1, 1, fc=c) for c in reversed(colors)]
+		# legend_labels = ["%i-%i cells" % c for c in reversed(cluster_ranges)]
+		# plt.legend(legend_rects, legend_labels, loc=4)
 	n = 0
-	print len(sample)
 	for i in xrange(0, len(sample)):
 		series = relay_series[i]
 		ident = sample[i]['ident']
 		artist = ax.scatter(range(0, len(series)), [n]*len(series),
 			c=series, marker="s", edgecolors='none', vmin=vmin, vmax=vmax,
-			cmap=cmap, picker=True)
-		n += 1
+			cmap=cm.coolwarm, picker=True)
+		n += 2
 		artist_ident_map[ident] = artist
-
-def do_agg_colorplots(records, direc_key, window_size):
-	clust_ids = set(rec['ident'] for rec in records)
-	clusters = dict((ident, []) for ident in clust_ids)
-	fig1 = plt.figure()
-	# fig2 = plt.figure()
-	flattened = [rec[direc_key] for rec in records]
-	discretized, cluster_ranges = discretize(flattened, N_CLUSTERS)
-	print cluster_ranges
-	idx = 0
-	print records[0]
-	for record in records:
-		clusters[record['ident']].append(record)
-	for i, ident in enumerate(clust_ids):
-		if i < 9:
-			ax = fig1.add_subplot(330+i+1)
-		else:
-			ax = fig2.add_subplot(330+i-9)
-		ax.set_aspect('equal')
-		ax.get_yaxis().set_ticks([])
-		ax.get_xaxis().set_ticks([])
-		do_colorplot(clusters[ident], direc_key, window_size, ax, True, True)
-	# fig.tight_layout()
+	if not no_chrome:
+		fig.colorbar(artist)
 
 if __name__ == "__main__":
 	graphing_mode = sys.argv[1]
@@ -348,25 +329,29 @@ if __name__ == "__main__":
 	else:
 		print "Invalid cell direction"
 		exit()
-	if graphing_mode == "-timeplot":
-		cstr, ipstr = sys.argv[4].split(",")
-		ts_ident = (int(cstr), int(ipstr))
 	with open(inpath) as data_file:
 		print "Reading data..."
 		data = cPickle.load(data_file)
-		window_size, records = data['window_size'], data['records']
-		print "%i series" % len(records)
-		print "Graphing..."
-		if graphing_mode == '-summarize':
-			do_summarize(records, direc_key)
-		elif graphing_mode == '-horizon':
-			do_horizon(records, direc_key, window_size)
-		elif graphing_mode == '-timeplot':
-			do_timeplot(records, direc_key, window_size, ts_ident)
-		elif graphing_mode == '-colorplots':
-			do_colorplot(records, direc_key, window_size)
-		elif graphing_mode == '-agg-colorplots':
-			do_agg_colorplots(records, direc_key, window_size)
-		else:
-			print "ERROR: Invalid graphing mode selected"
-		plt.show()
+	window_size, records = data['window_size'], data['records']
+	if graphing_mode == "-timeplot":
+		cstr, ipstr = sys.argv[4].split(",")
+		ts_ident = (int(cstr), int(ipstr))
+	elif graphing_mode == "-agg-colorplots":
+		k_val = int(sys.argv[4])
+		records = filter(lambda r: r['ident'] == (k_val, k_val), records)
+	print "%i series" % len(records)
+	print "Graphing..."
+	if graphing_mode == '-summarize':
+		do_summarize(records, direc_key)
+	elif graphing_mode == '-horizon':
+		do_horizon(records, direc_key, window_size)
+	elif graphing_mode == '-timeplot':
+		do_timeplot(records, direc_key, window_size, ts_ident)
+	elif graphing_mode == '-colorplots':
+		do_colorplot(records, direc_key, window_size)
+	elif graphing_mode == '-agg-colorplots':
+		do_colorplot(records, direc_key, window_size)
+		do_horizon(records, direc_key, window_size, MAX_OBS)
+	else:
+		print "ERROR: Invalid graphing mode selected"
+	plt.show()
