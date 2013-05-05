@@ -137,8 +137,6 @@ def trainHMM(pair):
 		hmm.baumWelch(toSequenceSet(cluster))
 		A_p, B_p, pi_p = hmmToTriple(hmm)
 	else:
-		print "DISCRETE!"
-		assert 0 == 1
 		# If we have a state with zero standard deviation, Baum Welch dies on
 		# a continuous HMM with overflow errors. To fix this, we replace each
 		# observation with its cluster label, then train a Discrete Markov
