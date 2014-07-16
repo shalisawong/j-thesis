@@ -133,7 +133,8 @@ if __name__ == "__main__":
 			cPickle.dump(records, outfile, protocol=2)
 			print ident
 
+'''
 		with open(outpath, 'r') as meow:
 			r = cPickle.load(meow)
 			print r.get((18, '11.0.0.3'))
-
+'''
