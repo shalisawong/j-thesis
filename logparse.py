@@ -14,6 +14,10 @@ The output file is a pickled list in the format:
   ...
 ]
 @author: Julian Applebaum
+
+****Edited 7/16/15 with clientlogging modifications**** @author: Shalisa Pattarawuttiwong
+
+
 """
 
 from datetime import datetime
@@ -34,7 +38,7 @@ def parse_time(time_str):
 	n_milliseconds = int(time_str[-3:])
 	return 1000*n_seconds + n_milliseconds
 
-def parse_line(line):
+def parse_line(line="Jan 01 00:20:01.260 [notice] CLIENTLOGGING: 11.0.0.3 <- 11.0.0.9 (2147484638 <- 10637) CIRC 18"):
 	"""
 	Parse the circuit id, ip slug, and timestamp from a line in
 	the hack_tor log file.
@@ -42,8 +46,8 @@ def parse_line(line):
 	@return: A tuple ((circid, ipslug), timestamp)
 	"""
 	split = line.split(" ")
-	circid = int(split[5])
-	ipslug = int(split[6])
+	circid = int(split[12])
+	ipslug = split[5]                    # should be pseudonymized and be an int
 	time = parse_time(line[0:19])
 	return ((circid, ipslug), time)
 
@@ -67,17 +71,19 @@ def is_valid_circ(record):
 			record['relays_in'][-1] <= record['destroy'])
 
 if __name__ == "__main__":
-	lfpath = sys.argv[1]
+	lfpath = sys.argv[1]     # the tor formatted log file -- tor_fmt_relayname.log
 	outpath = sys.argv[2]
 	with open(lfpath) as logfile:
 		print "Reading file..."
 		records = {}
-		n_entries = 0
+		n_entries = -1
 		print "Parsing..."
 		for line in logfile:
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
+
+
 			if line[29:35] == "CREATE":
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
@@ -99,20 +105,35 @@ if __name__ == "__main__":
 					# DESTROY was sent.
 					if record['destroy'] is None:
 						record['destroy'] = time
-			elif line[29:32] == "RRC":
+
+
+			elif line[29:42] == "CLIENTLOGGING":  # changed from RRC to CLIENTLOGGING
 				ident, time = parse_line(line)
 				record = records.get(ident)
-				direc = line[32]
-				if record is not None:
-					if direc == "I":
+
+				if record is None:
+					records[ident] = {
+						'ident': ident,
+						'relays_in':[],
+						'relays_out':[]
+				}
+				else:
+					if line[53:55] == "<-":
 						record['relays_in'].append(time)
-					elif direc == "O":
+					elif line[53:55] == "->":
 						record['relays_out'].append(time)
+
 		with open(outpath, 'w') as outfile:
-			print "Removing invalid circuits..."
-			filtered = filter(is_valid_circ, records.itervalues())
+			# print "Removing invalid circuits..."
+			# filtered = filter(is_valid_circ, records.itervalues())
 			print "%i circuits total" % len(records)
-			print "%i (%.2f%%) valid circuits" % (len(filtered),
-				100.0*len(filtered)/len(records))
+			# print "%i (%.2f%%) valid circuits" % (len(filtered),
+			#   	100.0*len(filtered)/len(records))
 			print "Dumping valid circuits to %s" % outpath
-			cPickle.dump(filtered, outfile, protocol=2)
+			cPickle.dump(records, outfile, protocol=2)
+			print ident
+
+		with open(outpath, 'r') as meow:
+			r = cPickle.load(meow)
+			print r.get((18, '11.0.0.3'))
+

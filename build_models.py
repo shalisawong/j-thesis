@@ -22,12 +22,14 @@ def filter_processed(series):
 
 if __name__ == "__main__":
 	logging.disable('warning')
-	cfg_path = sys.argv[1]
+	cfg_path = sys.argv[1]                        # cfg? -- .json?
 	with open(cfg_path) as cfg_file:
 		cfg = json.load(cfg_file)
 	with open(cfg['inpath']) as datafile:
-		records = cPickle.load(datafile)['records']
-	out_series = [record['relays_out'] for record in records]
+		records = cPickle.load(datafile)#['records']
+
+	out_series = [records.get(record).get('relays_out') for record in records]
+
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
 	print "%i series after preprocessing" % len(filtered)

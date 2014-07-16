@@ -12,7 +12,7 @@ An example line of output from scallion.log:
 Output (regular Tor output):
 Jan 01 00:00:05.000 [notice] CREATE: 53683 63.1.0.0
 
-Edited 7/16/15 with clientlogging modifications
+****Edited 7/16/15 with clientlogging modifications****
 
 example input at [notice] log level taken from filtered_scallion.log output:
 00:19:09:350102143 [relay2-11.0.0.6] CLIENTLOGGING: 11.0.0.3 -> 11.0.0.9 (2147484638 -> 10637) CIRC 18
@@ -30,11 +30,10 @@ import sys, re
 if __name__ == "__main__":
 	nodename = sys.argv[1]  # nodename = name of relay/node wanted -- 
                             # in the example above, this is 2.relay
-
+	
 	f_name = "tor_fmt_" + nodename + ".log"
 	with open(f_name, "w") as f_out:
-		f_out.write(nodename + "\n")
-
+	
 		while True:
 			line = sys.stdin.readline() # read in a log line from stdin from the shadow log
 			if line == "":
