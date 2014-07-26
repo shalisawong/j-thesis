@@ -1,5 +1,5 @@
 *.pyc
-*.log
+scallion_10.log
 *.gz
 .DS_Store
 logs/parsed/*
