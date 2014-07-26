@@ -41,7 +41,7 @@ def window_relays(create, destroy, relays, window_size):
 	@param: window_size: The length, in milliseconds, of each window
 	@return: The windowed version of the relay time series.
 	"""
-	circ_len = destroy - create
+	circ_len = destroy - create           
 	# make all times relative to the last CREATE cell sent
 	adj_times = [t - create for t in relays]
 	n_windows = max(1, int(round(circ_len/window_size + .5)))
@@ -70,6 +70,7 @@ if __name__ == "__main__":
 			records = cPickle.load(data_file)
 			print "Windowing %i circuits (parallel)..." % len(records)
 			map_items = zip(records, [window_size] * len(records))
+
 			windowed = pool.map(window_record, map_items)
 			print "Done"
 			output = {

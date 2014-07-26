@@ -20,6 +20,8 @@ The output file is a pickled list in the format:
 
 """
 
+from pprint import pprint
+
 from datetime import datetime
 import sys, cPickle
 
@@ -45,9 +47,10 @@ def parse_line(line="Jan 01 00:20:01.260 [notice] CLIENTLOGGING: 11.0.0.3 <- 11.
 	@param line: The line
 	@return: A tuple ((circid, ipslug), timestamp)
 	"""
+        # hex vs int????
 	split = line.split(" ")
-	circid = int(split[12])
-	ipslug = split[5]                    # should be pseudonymized and be an int
+	circid = int(split[-1], 16)
+	ipslug = int(split[6], 16)                    # should be pseudonymized and be an int
 	time = parse_time(line[0:19])
 	return ((circid, ipslug), time)
 
@@ -76,15 +79,14 @@ if __name__ == "__main__":
 	with open(lfpath) as logfile:
 		print "Reading file..."
 		records = {}
-		n_entries = -1
+		n_entries = 0
 		print "Parsing..."
 		for line in logfile:
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
-
-
-			if line[29:35] == "CREATE":
+			
+			if line[44:50] == "CREATE":
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
 				# CREATE was sent.
@@ -96,7 +98,7 @@ if __name__ == "__main__":
 					'relays_in': [],
 					'relays_out': []
 				}
-			elif line[29:36] == "DESTROY":
+			elif line[44:51] == "DESTROY":
 				ident, time = parse_line(line)
 				record = records.get(ident)
 				if record is not None:
@@ -107,32 +109,39 @@ if __name__ == "__main__":
 						record['destroy'] = time
 
 
-			elif line[29:42] == "CLIENTLOGGING":  # changed from RRC to CLIENTLOGGING
+			elif line[44:49] == "RELAY":  # changed from RRC to RELAY
 				ident, time = parse_line(line)
 				record = records.get(ident)
 
-				if record is None:
-					records[ident] = {
-						'ident': ident,
-						'relays_in':[],
-						'relays_out':[]
-				}
-				else:
-					if line[53:55] == "<-":
-						record['relays_in'].append(time)
-					elif line[53:55] == "->":
-						record['relays_out'].append(time)
+#				if record is None:
+#					records[ident] = {
+#						'ident': ident,
+#						'relays_in':[],
+#						'relays_out':[] 
+#                   }
+#					record = records.get(ident)
+#					if line[46:48] == "<-":
+#						record['relays_in'].append(time)
+#					elif line[46:48] == "->":
+#						record['relays_out'].append(time)
+#				else: '''
+			
+				if line[52:54] == "<-":
+					record['relays_in'].append(time)
+				elif line[52:54] == "->":
+					record['relays_out'].append(time)
 
 		with open(outpath, 'w') as outfile:
-			# print "Removing invalid circuits..."
-			# filtered = filter(is_valid_circ, records.itervalues())
+			print "Removing invalid circuits..."
+			filtered = filter(is_valid_circ, records.itervalues())
 			print "%i circuits total" % len(records)
-			# print "%i (%.2f%%) valid circuits" % (len(filtered),
-			#   	100.0*len(filtered)/len(records))
+			print "%i (%.2f%%) valid circuits" % (len(filtered),
+				100.0*len(filtered)/len(records))
 			print "Dumping valid circuits to %s" % outpath
 			cPickle.dump(records, outfile, protocol=2)
-			print ident
 
+
+			
 '''
 		with open(outpath, 'r') as meow:
 			r = cPickle.load(meow)

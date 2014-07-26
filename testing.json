@@ -3,10 +3,10 @@
 	"outdir": "testing",
 	"first_seed": 0,
 	"n_jobs": null,
-	"min_k": 6,
+	"min_k": 0,
 	"max_k": 20,
-	"min_m": 6,
-	"max_m": 6,
-	"beta": 1,
+	"min_m": 0,
+	"max_m": 10,
+	"beta": 0.5,
 	"n_trials": 1
 }

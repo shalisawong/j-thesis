@@ -26,9 +26,12 @@ if __name__ == "__main__":
 	with open(cfg_path) as cfg_file:
 		cfg = json.load(cfg_file)
 	with open(cfg['inpath']) as datafile:
-		records = cPickle.load(datafile)#['records']
+		records = cPickle.load(datafile)  #['records']
 
+	for record in records:
+		print record
 	out_series = [records.get(record).get('relays_out') for record in records]
+	print out_series
 
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
@@ -49,6 +52,7 @@ if __name__ == "__main__":
 				print "Training on %i time series" % len(train)
 				smyth_out = HMMCluster(train, target_m, cfg['min_k'],
 					cfg['max_k'], 'hmm', 'smyth', 'hierarchical', cfg['n_jobs'])
+				print smyth_out
 				try:
 					smyth_out.model()
 				except Exception, e:
