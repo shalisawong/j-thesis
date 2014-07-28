@@ -3,8 +3,10 @@ Window the sequences from a logparse.py output file. Outputs a pickled dict:
 { 'window_size': window_size
   'records': same as input, but with 'relay_in' and 'relay_out' replaced by
   			 their windowed versions }
+
 	Syntax: python window.py infile outfile window_size
 window_size is in milliseconds.
+
 @author: Julian Applebaum
 """
 
@@ -41,7 +43,7 @@ def window_relays(create, destroy, relays, window_size):
 	@param: window_size: The length, in milliseconds, of each window
 	@return: The windowed version of the relay time series.
 	"""
-	circ_len = destroy - create           
+	circ_len = destroy - create
 	# make all times relative to the last CREATE cell sent
 	adj_times = [t - create for t in relays]
 	n_windows = max(1, int(round(circ_len/window_size + .5)))
@@ -65,17 +67,17 @@ if __name__ == "__main__":
 	window_size = int(sys.argv[3])
 	pool = Pool()
 	with open(inpath) as data_file:
-		with open(outpath, 'w') as out_file:
-			print "Loading circuit data..."
-			records = cPickle.load(data_file)
-			print "Windowing %i circuits (parallel)..." % len(records)
-			map_items = zip(records, [window_size] * len(records))
+		print "Loading circuit data..."
+		records = cPickle.load(data_file)
 
-			windowed = pool.map(window_record, map_items)
-			print "Done"
-			output = {
-				'window_size': window_size,
-				'records': windowed
-			}
-			print "Dumping to %s" % outpath
-			cPickle.dump(output, out_file, protocol=2)
+	with open(outpath, 'w') as out_file:
+		print "Windowing %i circuits (parallel)..." % len(records)
+		map_items = zip(records, [window_size] * len(records))
+		windowed = pool.map(window_record, map_items)
+		print "Done"
+		output = {
+			'window_size': window_size,
+			'records': windowed
+		}
+		print "Dumping to %s" % outpath
+		cPickle.dump(output, out_file, protocol=2)

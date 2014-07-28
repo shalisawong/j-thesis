@@ -22,6 +22,8 @@ output:
 Jan 01 00:19:09.350 [notice] CLIENTLOGGING: RELAY 11.0.0.3 -> 11.0.0.9 (2147484638 -> 10637) CIRC 18
 (hour:minute:second:mircosecond)
 
+syntax: python logshadow.py infile nodename
+
 
 """
 
@@ -31,7 +33,7 @@ import sys, re
 
 def ip_replace(line, ip_dict, ip_pseudo):
 	split = line.split()
-	
+
 	# grab ip addresses
 	p_relay = split[8]
 	if split[7] != "CREATE":
@@ -48,9 +50,9 @@ def ip_replace(line, ip_dict, ip_pseudo):
 		ip_dict[p_relay] = hex_ip
 		new_p_relay = hex_ip
 		ip_pseudo += 1
-					
+
 	split[8] = str(new_p_relay)
-					
+
 	# n_relay
 	if (n_relay != 0):
 		if (n_relay in ip_dict):
@@ -60,16 +62,16 @@ def ip_replace(line, ip_dict, ip_pseudo):
 			ip_dict[n_relay] = hex_ip
 			new_n_relay = hex_ip
 			ip_pseudo += 1
-						
+
 		split[10] = str(new_n_relay)
 	return split, ip_dict, ip_pseudo
 
 
 if (__name__ == "__main__"):
 	infile = sys.argv[1]
-	nodename = sys.argv[2]  # nodename = name of relay/node wanted -- 
+	nodename = sys.argv[2]  # nodename = name of relay/node wanted --
                             # in the example above, this is 2.relay
-	
+
 	f_name = "tor_fmt_" + nodename + ".log"
 	ip_dict = {}
 	ip_pseudo = 1
@@ -81,7 +83,7 @@ if (__name__ == "__main__"):
 #			if line == "":
 #				exit()
 
-			if ("CLIENTLOGGING" in line): 
+			if ("CLIENTLOGGING" in line):
 				# pseudonomyize ip addresses
 				split, ip_dict, ip_pseudo = ip_replace(line, ip_dict, ip_pseudo)
 

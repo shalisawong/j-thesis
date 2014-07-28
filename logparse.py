@@ -1,7 +1,9 @@
 """
 Parse a hack_tor log file infile and output the resulting records as a
 pickled list.
+
 	Syntax: python2.7 logparse.py infile outfile
+
 The output file is a pickled list in the format:
 [ { 'ident': [circuit id, ip slug]
 	'create': timestamp of last create cell received
@@ -85,7 +87,7 @@ if __name__ == "__main__":
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
-			
+
 			if line[44:51] == "CREATED":
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
@@ -108,28 +110,15 @@ if __name__ == "__main__":
 					if record['destroy'] is None:
 						record['destroy'] = time
 
-
 			elif line[44:49] == "RELAY":  # changed from RRC to RELAY
 				ident, time = parse_line(line)
 				record = records.get(ident)
-
-#				if record is None:
-#					records[ident] = {
-#						'ident': ident,
-#						'relays_in':[],
-#						'relays_out':[] 
-#                   }
-#					record = records.get(ident)
-#					if line[46:48] == "<-":
-#						record['relays_in'].append(time)
-#					elif line[46:48] == "->":
-#						record['relays_out'].append(time)
-#				else: '''
-			
-				if line[52:54] == "<-":
-					record['relays_in'].append(time)
-				elif line[52:54] == "->":
-					record['relays_out'].append(time)
+				direc = line[53:55]
+				if record is not None:
+					if direc == "<-":
+						record['relays_in'].append(time)
+					elif direc == "->":
+						record['relays_out'].append(time)
 
 		with open(outpath, 'w') as outfile:
 			print "Removing invalid circuits..."
@@ -138,12 +127,6 @@ if __name__ == "__main__":
 			print "%i (%.2f%%) valid circuits" % (len(filtered),
 				100.0*len(filtered)/len(records))
 			print "Dumping valid circuits to %s" % outpath
-			cPickle.dump(records, outfile, protocol=2)
+			cPickle.dump(filtered, outfile, protocol=2)
 
 
-			
-'''
-		with open(outpath, 'r') as meow:
-			r = cPickle.load(meow)
-			print r.get((18, '11.0.0.3'))
-'''
