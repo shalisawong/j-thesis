@@ -4,7 +4,7 @@
 	occurances} in the scallion.log. Allows to pick relay with most cells going through.
 '''
 def info_scallion():
-	with open("scallion_10.log", "r") as f:
+	with open("scallion10.log", "r") as f:
 		nodes = {}
 		relay = 0
 		non_relay = 0
