@@ -86,7 +86,7 @@ if __name__ == "__main__":
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
 			
-			if line[44:50] == "CREATE":
+			if line[44:51] == "CREATED":
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
 				# CREATE was sent.
