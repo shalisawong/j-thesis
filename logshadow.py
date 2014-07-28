@@ -1,4 +1,4 @@
-#!/usr/bin/python2.6
+#!/usr/bin/python2.7
 
 """
 Filter and modify Scallion log output to look like regular Tor output.

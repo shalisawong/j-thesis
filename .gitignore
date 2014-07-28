@@ -1,6 +1,7 @@
 *.pyc
-scallion_10.log
+*.png
 scallion10.log
+scallion10b.log
 *.gz
 .DS_Store
 logs/parsed/*
