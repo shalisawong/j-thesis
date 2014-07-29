@@ -127,6 +127,7 @@ if __name__ == "__main__":
 			print "%i (%.2f%%) valid circuits" % (len(filtered),
 				100.0*len(filtered)/len(records))
 			print "Dumping valid circuits to %s" % outpath
+
 			cPickle.dump(filtered, outfile, protocol=2)
 
 

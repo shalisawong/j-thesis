@@ -22,7 +22,7 @@ output:
 Jan 01 00:19:09.350 [notice] CLIENTLOGGING: RELAY 11.0.0.3 -> 11.0.0.9 (2147484638 -> 10637) CIRC 18
 (hour:minute:second:mircosecond)
 
-syntax: python logshadow.py infile nodename
+syntax: python logshadow.py infile nodename outfile
 
 
 """
@@ -71,12 +71,13 @@ if (__name__ == "__main__"):
 	infile = sys.argv[1]
 	nodename = sys.argv[2]  # nodename = name of relay/node wanted --
                             # in the example above, this is 2.relay
+	outfile = sys.argv[3]
 
-	f_name = "tor_fmt_" + nodename + ".log"
+#	f_name = "tor_fmt_" + nodename + ".log"
 	ip_dict = {}
 	ip_pseudo = 1
 
-	with open(infile, "r") as f_in, open(f_name, "w") as f_out:
+	with open(infile, "r") as f_in, open(outfile, "w") as f_out:
 		for line in f_in:
 #		while True:
 #			line = sys.stdin.readline() # read in a log line from stdin from the shadow log
@@ -98,5 +99,7 @@ if (__name__ == "__main__"):
 					tor_log = date_fmt + " " + loglevel + " " + " ".join(split[6:]) + "\n"
 					f_out.write(tor_log)
 
-		print ip_dict
+	# save pseudo ip map
+	with open("pseudo_dict.log","w") as dict_out:
+		dict_out.write(ip_dict)
 

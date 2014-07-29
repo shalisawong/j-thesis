@@ -239,7 +239,7 @@ def do_horizon(records, direc_key, window_size, ylim=None):
 	if ylim is not None:
 		pylab.ylim([0, ylim])
 
-def do_timeplot(records, direc_key, window_size, ts_ident):
+def do_timeplot(records, direc_key, window_size, ts_ident_list):
 	"""
 	Display a time plot and a correlogram for one time series
 	@param records: the list of circuits records containing the series
@@ -248,19 +248,33 @@ def do_timeplot(records, direc_key, window_size, ts_ident):
 	@param window_size: the size of the cell count windows
 	@param ts_ident: the (circ_id, ip_slug) tuple identifying the series
 	"""
+	subplot_size = 421
+
 	fig = plt.figure()
-	fig.canvas.set_window_title("%i-%i-%i" % (ts_ident[0], ts_ident[1],
-		window_size))
-	timeplot = fig.add_subplot(111)
-	# acorrplot = fig.add_subplot(122)
-	for record in records:
-		if record['ident'] == ts_ident:
-			plt.xlabel("Window # (%i ms windows)" % window_size)
-			plt.ylabel("Outgoing Relay Cell Count")
-			series = record[direc_key]
-			timeplot.fill_between(range(0, len(series)), series, [0]*len(series),
-				color='grey')
-			# acorr_plot(series, acorrplot)
+
+	for ident in ts_ident_list:
+		cstr, ipstr = ident.split(",")
+
+		fig.canvas.set_window_title("%i-%i-%i" % (int(cstr), int(ipstr),
+			window_size))
+
+		timeplot = fig.add_subplot(subplot_size)
+		# acorrplot = fig.add_subplot(122)
+		for record in records:
+			if record['ident'] == (int(cstr), int(ipstr)):
+				plt.xlabel("Window # (%i ms windows)" % window_size)
+				plt.ylabel("Outgoing Relay Cell Count")
+				series = record[direc_key]
+
+				# line graphs
+				plt.plot(series)
+				
+			#	timeplot.fill_between(range(0, len(series)), series, [0]*len(series),
+				#	color='grey')
+				# acorr_plot(series, acorrplot)
+
+		subplot_size += 1
+
 
 def do_colorplot(records, direc_key, window_size, ax=None, no_chrome=False,
 	sample_size=1000):
@@ -322,6 +336,7 @@ if __name__ == "__main__":
 	else: seed = 0
 	print "Random seed =", seed
 	random.seed(seed)
+	ts_ident_list = []
 	if direc == "I":
 		direc_key = 'relays_in'
 	elif direc == "O":
@@ -334,8 +349,9 @@ if __name__ == "__main__":
 		data = cPickle.load(data_file)
 	window_size, records = data['window_size'], data['records']
 	if graphing_mode == "-timeplot":
-		cstr, ipstr = sys.argv[4].split(",")
-		ts_ident = (int(cstr), int(ipstr))
+		for arg in range(len(sys.argv)):
+			if arg >= 5:
+				ts_ident_list.append(sys.argv[arg])
 	elif graphing_mode == "-agg-colorplots":
 		k_val = int(sys.argv[4])
 		records = filter(lambda r: r['ident'] == (k_val, k_val), records)
@@ -346,7 +362,7 @@ if __name__ == "__main__":
 	elif graphing_mode == '-horizon':
 		do_horizon(records, direc_key, window_size)
 	elif graphing_mode == '-timeplot':
-		do_timeplot(records, direc_key, window_size, ts_ident)
+		do_timeplot(records, direc_key, window_size, ts_ident_list)
 	elif graphing_mode == '-colorplots':
 		do_colorplot(records, direc_key, window_size)
 	elif graphing_mode == '-agg-colorplots':
