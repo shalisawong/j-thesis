@@ -26,7 +26,7 @@ if __name__ == "__main__":
 	with open(cfg_path) as cfg_file:
 		cfg = json.load(cfg_file)
 	with open(cfg['inpath']) as datafile:
-		records = cPickle.load(datafile)  #['records']
+		records = cPickle.load(datafile)['records']
 
 	for record in records:
 		print record

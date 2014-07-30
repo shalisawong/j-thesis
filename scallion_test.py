@@ -5,8 +5,6 @@ import sys, re, cPickle, random
 				 post-fmt for num_circuits
 '''
 
-VALID_CIRCS = ['135', '1f0', '1fa', 'a4', '231', '14d', '197', '267', '10f', '170', 'eb', '1db', 'd4', '13c', '175', '266', '12d', '1f4', 'd3', '122', '1cc', '233', 'cb', '154', '2bd', '30b', '2a4', '1d7', '1cf', '70', '107', '1d3', '2d4', '198', '98', '234', 'ba', '1d0', '18c', '1e6', '17f', '31e', 'f0', '24e', '2fb', 'b2', 'f9', '132', '1b8', '119', 'ce', '147', '292', '8c', 'ab', '29f', 'b5', '168', '189', 'f4', '1dc', '16a', '89', '125', '25e', '115', '1ad', '141', '243', '28d', '29b', '229', '2cb', 'b7', 'aa', 'f5', '2ff', '21d', '17c', '29a', '113', '1fe', '140', '1a3', '20a', '2a0', 'd8', '289', 'ac', '19c', '5e', '169', '15b', '2fc', '1b4', 'de', '17d', '177', '25d', 'bc', '2de', 'fa', '130', '1bb', '8b', '296', '238', 'a6', '1a1', '241', '253', '18f', '163', '76', '15e', '286', '283', 'f7', '176', 'd0', '2ba', '1bc', '9c', '278', '25f', '23e', '260', '1da', '28e', 'e7', 'ad', '195', '2a3', '148', '1aa', '151', '18b', '105', '225', '110', '2bb', '223', '1ed', '2fe', '184', '131', '191', '2b6', '150', '80', '55', '2aa', '68', '11d', '20e', '249', '294', '219', '21e', '1eb', '207', '12f', 'd6', '193', '171', 'da', '6e', '12b', '2ea', 'bb', 'a1', '21f', '17e', '27f', '23c', '21c', '17b', '280', '1ee', 'e2', '117', '6c', '1c5', 'e6', '5d', '161', '162', '1e7', '331', 'f2', '221', '1f3', '1c3', '142', '2ce', '1a0', '1bf', '1f5', '13a', 'f8', '262', '305', '203', '12e', '275', '25c', '111', 'e8', '9a', 'c4', '4e', '22e', '50', '2c2', '205', '297', '1ff', '126', '182', '1c0', '10c', '185', '271', '235', '2d2', '92', '123', '1d5', '81', '302', '10b', '261', '181', '1a5', '2f0', '2d8', '2a1', 'd2', '1c8', '1c2', 'ef', '109', '29c', '1af', '226', 'ca', '158', '99', 'bf', '18d', '217', 'd7', 'c6', 'cc', 'c5'] 
-
 '''
 	Returns the number of nodes that are relays, non-relays, and a dictionary of {nodes:number 
 	occurances} in the scallion.log. Allows to pick relay with most cells going through.
@@ -42,14 +40,21 @@ def info_scallion(infile):
 	Extracts the host name and ip addresses from scallion.log and 
 	returns a dictionary of {circ_id:name}. Checks only valid circuits.
 '''
-def circuit_client_map(infile, nodename):
+def circuit_client_map(infile, nodename, ident_list):
 
 	ip_addresses = {}
 	circuits = {}
 	circ_name_map = {}
+	valid_circs = [hex(i[0])[2:] for i in ident_list]
 
 	with open(infile) as f:
+		print "Reading file..."
+		n_entries = 0
+		print "Mapping Clients and Circuits..."
 		for line in f:
+			n_entries += 1
+			if n_entries % 50000 == 0 and n_entries != 0:
+				print "%i entries processed" % n_entries
 
 			# done in the beginning of scallion.log	
 			if "Created Host" in line:
@@ -73,7 +78,7 @@ def circuit_client_map(infile, nodename):
 				circ_id = split[-1]
 				prev_ip = split[8]
 
-				if circ_id in VALID_CIRCS and circ_id not in circuits:
+				if circ_id in valid_circs and circ_id not in circuits:
 						circuits[circ_id] = prev_ip
 				
 		for circ in circuits:
@@ -85,7 +90,26 @@ def circuit_client_map(infile, nodename):
 					circ_list = circ_name_map.get(name)
 					circ_list.append(int(circ, 16))
 		
-	with open("client_info.log", 'w') as client_log, open("rg2_50_parsed.pickle", 'r') as ident_log:
+	return circ_name_map # dict of {clientname:[circ1,circ2,circ3]}
+
+'''
+	return the list of idents from a trimmed window.pickle file _trimmed_good.pickle
+'''
+def get_ident_list(parsed_pickle):
+	with open(parsed_pickle, 'r') as ident_log:
+			data = cPickle.load(ident_log)
+			records = data['records']
+			ident_list = []
+			for record in records:
+					ident = record['ident']
+					ident_list.append(ident)
+			return ident_list
+
+'''
+	write out circ_name_map and ident_list to a file
+'''
+def write_client_info_log(circ_name_map, ident_list):
+		with open("client_info.log", 'w') as client_log:
 			records = cPickle.load(ident_log)
 
 			for key in sorted(circ_name_map.iterkeys()):
@@ -99,13 +123,50 @@ def circuit_client_map(infile, nodename):
 			client_log.write("Number of Circuits: " + str(num_circs) + "\n")
 			client_log.write("Number of Clients: " + str(len(circ_name_map)) + "\n")
 
-			ident_list = []
-			for record in records:
-					ident = record['ident']
-					ident_list.append(ident)
 			client_log.write(str(ident_list))
 	
-			return circ_name_map, ident_list
+'''
+	Returns ts_ident string to input into exploratory.py
+'''
+def input_timeplot_single_client(circ_name_map, ident_list, type_client, num_circs):
+		filt_circ_name_map = {k:v for (k,v) in circ_name_map.iteritems() if type_client in k}
+		totalcircs = sum(len(v) for v in filt_circ_name_map.itervalues())
+		print filt_circ_name_map, totalcircs
+		ident_string = ''
+		repeat = []
+
+		while num_circs > 0:
+				# pick client and specific circuit
+				client = random.choice(filt_circ_name_map.keys())
+				circ = random.choice(circ_name_map.get(client))
+				# grab ident
+				for item in ident_list:
+						if ((item[0] == circ and item not in repeat)or len(repeat) == totalcircs):
+								repeat.append(item)
+								ident = "'" + str(item[0]) + "," + str(item[1]) + "' "
+								ident_string += ident
+								num_circs -= 1
+		return ident_string
+
+'''
+	For all clients
+'''
+def input_timeplot_clients(circ_name_map, ident_list, type_client, num_circs):
+		ident_string_dict = {}
+		if type_client == "-allClients":
+				web = input_timeplot_single_client(circ_name_map, ident_list, 'web', num_circs)
+				ident_string_dict['web'] = web
+				bulk = input_timeplot_single_client(circ_name_map, ident_list, 'bulk', num_circs)
+				ident_string_dict['bulk'] = bulk
+				perf50k = input_timeplot_single_client(circ_name_map, ident_list, 'perfclient50', num_circs)
+				ident_string_dict['perf50k'] = perf50k
+				perf1m = input_timeplot_single_client(circ_name_map, ident_list, 'perfclient1m', num_circs)
+				ident_string_dict['perf1m'] = perf1m
+				perf5m = input_timeplot_single_client(circ_name_map, ident_list, 'perfclient5m', num_circs)
+				ident_string_dict['perf5m'] = perf5m
+				return ident_string_dict
+		else:
+				return input_timeplot_single_client(circ_name_map, ident_list, type_client, num_circs)
 
 
 if __name__ == "__main__":
@@ -114,27 +175,16 @@ if __name__ == "__main__":
 	
 	if option == "pre-fmt":
 		info_scallion(infile)	
-	elif option == "circ-client-map":
-		nodename = sys.argv[3]
-		type_client = sys.argv[4]
-		num_circs = int(sys.argv[5])
+	elif option == "timeplot-client":
+		parsed_pickle = sys.argv[3]
+		nodename = sys.argv[4]
+		type_client = sys.argv[5]
+		num_circs = int(sys.argv[6])
 
-		circ_name_map, ident_list = circuit_client_map(infile, nodename)
-		filt_circ_name_map = {k:v for (k,v) in circ_name_map.iteritems() if type_client in k}
-		print filt_circ_name_map
-		ident_string = ''
-		repeat = []
+		ident_list = get_ident_list(parsed_pickle)
+		circ_name_map = circuit_client_map(infile, nodename, ident_list) 
 
-		while num_circs > 0:
-				client = random.choice(filt_circ_name_map.keys())
-				circ = random.choice(circ_name_map.get(client))
-				for item in ident_list:
-						if item[0] == circ and item not in repeat:
-								repeat.append(item)
-								ident = "'" + str(item[0]) + "," + str(item[1]) + "' "
-								ident_string += ident
-								num_circs -= 1
-		print ident_string
+		print input_timeplots_client(circ_name_map, ident_list, type_client, num_circs)
 
 '''
 7/23/14

@@ -11,6 +11,7 @@ if __name__ == "__main__":
 	rej_records = []
 	with open(inpath) as datafile:
 		data = cPickle.load(datafile)
+		print data
 		window_size = data['window_size']
 		records = data['records']
 		for record in records:

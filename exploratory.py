@@ -252,13 +252,36 @@ def do_timeplot(records, direc_key, window_size, ts_ident_list):
 
 	fig = plt.figure()
 
-	for ident in ts_ident_list:
+	cstr, ipstr = ts_ident_list[0].split(",")
+
+	fig.canvas.set_window_title("%i-%i-%i" % (int(cstr), int(ipstr),
+			window_size))
+
+	timeplot = fig.add_subplot(subplot_size)
+		# acorrplot = fig.add_subplot(122)
+	for record in records:
+		if record['ident'] == (int(cstr), int(ipstr)):
+			plt.xlabel("Window # (%i ms windows)" % window_size)
+			plt.ylabel("Outgoing Relay Cell Count")
+			series = record[direc_key]
+
+			# line graphs
+			plt.plot(series)
+				
+			#	timeplot.fill_between(range(0, len(series)), series, [0]*len(series),
+				#	color='grey')
+				# acorr_plot(series, acorrplot)
+
+	subplot_size += 1
+
+
+	for ident in ts_ident_list[1:]:
 		cstr, ipstr = ident.split(",")
 
 		fig.canvas.set_window_title("%i-%i-%i" % (int(cstr), int(ipstr),
 			window_size))
 
-		timeplot = fig.add_subplot(subplot_size)
+		timeplot1 = fig.add_subplot(subplot_size, sharex=timeplot, sharey=timeplot)
 		# acorrplot = fig.add_subplot(122)
 		for record in records:
 			if record['ident'] == (int(cstr), int(ipstr)):
@@ -274,7 +297,7 @@ def do_timeplot(records, direc_key, window_size, ts_ident_list):
 				# acorr_plot(series, acorrplot)
 
 		subplot_size += 1
-
+	
 
 def do_colorplot(records, direc_key, window_size, ax=None, no_chrome=False,
 	sample_size=1000):

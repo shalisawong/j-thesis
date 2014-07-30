@@ -78,11 +78,18 @@ if (__name__ == "__main__"):
 	ip_pseudo = 1
 
 	with open(infile, "r") as f_in, open(outfile, "w") as f_out:
+		print "Reading file..."
+		n_entries = 0
+		print "Converting to tor format..."
 		for line in f_in:
 #		while True:
 #			line = sys.stdin.readline() # read in a log line from stdin from the shadow log
 #			if line == "":
 #				exit()
+			n_entries += 1
+			if n_entries % 50000 == 0 and n_entries != 0:
+				print "%i entries processed" % n_entries
+
 
 			if ("CLIENTLOGGING" in line):
 				# pseudonomyize ip addresses
@@ -98,8 +105,9 @@ if (__name__ == "__main__"):
 					date_fmt = date.strftime("%b %d %H:%M:%S.%f")[0:-3]
 					tor_log = date_fmt + " " + loglevel + " " + " ".join(split[6:]) + "\n"
 					f_out.write(tor_log)
-
+	
+	print "Done\n"
 	# save pseudo ip map
-	with open("pseudo_dict.log","w") as dict_out:
-		dict_out.write(ip_dict)
+	#with open("pseudo_dict_scallion50.log","w") as dict_out:
+	#	dict_out.write(str(ip_dict))
 

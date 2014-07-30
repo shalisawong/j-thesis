@@ -129,5 +129,6 @@ if __name__ == "__main__":
 			print "Dumping valid circuits to %s" % outpath
 
 			cPickle.dump(filtered, outfile, protocol=2)
+			print "Done\n"
 
 
