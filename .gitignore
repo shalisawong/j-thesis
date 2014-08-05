@@ -3,5 +3,6 @@
 *.log
 *.gz
 *.pickle
+model_errors.txt
 .DS_Store
 logs/parsed/*

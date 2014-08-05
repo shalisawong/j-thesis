@@ -13,13 +13,14 @@ Output (regular Tor output):
 Jan 01 00:00:05.000 [notice] CREATE: 53683 63.1.0.0
 
 ****Edited 7/16/15 with clientlogging modifications**** 7/24/14
+@author Shalisa Pattarawuttiwong
 
 example input at [notice] log level taken from filtered_scallion.log output:
-00:19:09:350102143 [relay2-11.0.0.6] CLIENTLOGGING: RELAY 11.0.0.3 -> 11.0.0.9 (2147484638 -> 10637) CIRC 18
+00:19:09:350102143 [relay2-11.0.0.6] CLIENTLOGGING: RELAY 11.0.0.3 -> 11.0.0.9 CIRC 18
 (hour:minute:second:nanosecond)
 
 output:
-Jan 01 00:19:09.350 [notice] CLIENTLOGGING: RELAY 11.0.0.3 -> 11.0.0.9 (2147484638 -> 10637) CIRC 18
+Jan 01 00:19:09.350 [notice] CLIENTLOGGING: RELAY 1 -> 2 CIRC 18
 (hour:minute:second:mircosecond)
 
 syntax: python logshadow.py infile nodename outfile
@@ -31,6 +32,15 @@ from datetime import datetime
 from pprint import pprint
 import sys, re
 
+'''
+	Pseudonymizes the ip addresses.
+	@param line: a line from scallion.log
+	@param ip_dict: a dictionary of the form {real_ip_address: pseudo_ip_address}
+	@param ip_pseudo: the integer representing the pseudonymized ip address
+	@return the line with the replaced ip_addr split into list format,
+			the dictionary of the form {real_ip_address: pseudo_ip_address},
+			and the integer representing the pseudonymized ip address
+'''
 def ip_replace(line, ip_dict, ip_pseudo):
 	split = line.split()
 

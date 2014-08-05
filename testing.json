@@ -1,12 +1,13 @@
 {
-	"inpath": "rg2_50_trimmed_good.pickle",
-	"outdir": "rg2_5_model",
+	"inpath": "rg1_tiny_trimmed_good.pickle",
+	"outdir": "rg1_tiny",
 	"first_seed": 0,
 	"n_jobs": null,
-	"min_k": 0,
-	"max_k": 20,
+	"min_k": 3,
+	"max_k": 4,
 	"min_m": 3,
-	"max_m": 4,
+	"max_m": 10,
 	"beta": 0.5,
 	"n_trials": 1
+
 }

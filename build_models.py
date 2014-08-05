@@ -1,3 +1,7 @@
+'''
+ Syntax: python build_models.py cfg_path
+'''
+
 from sklearn.cross_validation import train_test_split
 from numpy import std, mean
 from smyth import HMMCluster
@@ -22,17 +26,12 @@ def filter_processed(series):
 
 if __name__ == "__main__":
 	logging.disable('warning')
-	cfg_path = sys.argv[1]                        # cfg? -- .json?
+	cfg_path = sys.argv[1]                        
 	with open(cfg_path) as cfg_file:
 		cfg = json.load(cfg_file)
 	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
-
-	for record in records:
-		print record
-	out_series = [records.get(record).get('relays_out') for record in records]
-	print out_series
-
+	out_series = [record['relays_out'] for record in records]
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
 	print "%i series after preprocessing" % len(filtered)
@@ -52,7 +51,6 @@ if __name__ == "__main__":
 				print "Training on %i time series" % len(train)
 				smyth_out = HMMCluster(train, target_m, cfg['min_k'],
 					cfg['max_k'], 'hmm', 'smyth', 'hierarchical', cfg['n_jobs'])
-				print smyth_out
 				try:
 					smyth_out.model()
 				except Exception, e:

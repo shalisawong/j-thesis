@@ -43,12 +43,20 @@ def validateTriple(triple):
 	A, B, pi = triple
 	for row in A:
 		if abs(sum(row)-1.0) > .0001:
-			 return False
+			raise ValueError('Row in A does not sum to 1: ' + str(row)) # Could not build a valid HMM! \n %s' %
+	 #tripleToHMM(triple))
 		for a in row:
-			if a < 0: return False
+			if a < 0: raise ValueError('A is negative: ' + str(a)) #Could not build a valid HMM! \n %s' %
+	#						 tripleToHMM(triple))
 	if abs(sum(pi)-1.0) > .0001:
-		return False
-	return True
+		raise ValueError('pi does not sum to 1.') # Could not build a valid HMM! \n %s' %
+#	 tripleToHMM(triple))
+	if pi < 0: raise ValueError('pi is negative.') # Could not build a valid HMM!' \n %s' %
+							# tripleToHMM(triple))
+
+	#raise ValueError("Could not build a valid HMM! \n %s \n %s" % (
+	#	tripleToHMM(triple), label_seqs))
+
 
 def correctDMMTransitions(A):
 	"""
@@ -122,7 +130,11 @@ def trainHMM(pair):
 	If the observations in S can be clustered into target_m non-empty cluster,
 	then the resulting model will have target_m states. Otherwise, the model
 	will have one state per non-empty cluster for however many clusters could
-	be created.
+	be created
+	A - Transition Probability matrix (N x N) 
+	B - Ovservation Symbol Probablilty Distribution (N x M)
+	pi - Initial State Distribution Matrix (N x 1)
+	(N: # states in HMM, M: # observation symbols)
 
 	@param pair: A tuple of the form (S: list of sequences, target_m: int)
 	@return: The HMM as a (A, B, pi) triple
@@ -131,7 +143,8 @@ def trainHMM(pair):
 	B, labels, has_zero = smythEmissionDistribution((cluster, target_m))
 	m_prime = len(B)
 	pi = [1.0/m_prime] * m_prime
-	if not has_zero or len(cluster) > 1:
+	# change from "or" to "and"?
+	if not has_zero and len(cluster) > 1:
 		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
 		hmm = tripleToHMM((A, B, pi))
 		hmm.baumWelch(toSequenceSet(cluster))
@@ -158,6 +171,7 @@ def trainHMM(pair):
 		A_p0, pi_p = getDynamics(hmm)
 		A_p = correctDMMTransitions(A_p0)
 		B_p = B
+
 	# According to the GHMM mailing list, a very small standard deviation
 	# can cause underflow errors when attempting to compute log likelihood.
 	# We avoid this by placing a floor sigma >= .5. It's a little hacky, but
@@ -168,10 +182,8 @@ def trainHMM(pair):
 	if len(cluster) == 1:
 		B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
 	triple = (A_p, B_p, pi_p)
-	if validateTriple(triple):
-		return triple
-	raise ValueError("Could not build a valid HMM! \n %s \n %s" % (
-		tripleToHMM(triple), label_seqs))
+	validateTriple(triple)
+	return triple
 
 def randomDefaultTriple(pair):
 	pass

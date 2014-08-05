@@ -1,23 +1,11 @@
 '''
-For the 
+Pre-processing for plotting multiple time series data for specific clients. 
 
-Create visualizations for time series data from parsed, windowed log files.
-Supports horizon plots and color plots for random samples, histogram of
-distribution characteristics, and single series time plots.
-	Syntax: python exploratory.py -summarize logfile.pickle cell_direc
-			python exploratory.py -horizon logfile.pickle cell_direc rand_seed
-			python exploratory.py -colorplots logfile.pickle cell_direc rand_seed
-			python exploratory.py -timeplot logfile.pickle cell_direc ts_ident
-cell_direc is either "O" for outgoing, or "I" for incoming. rand_seed determines
-which 1000 series random sample is taken from the record set. 
-	Syntax: python scallion_test.py infile option
-				where option = "pre-fmt" for info_scallion
-			 				   "timeplot-client" 
 @author Shalisa Pattarawuttiwong
 Last Edited: 08/05/2014
 '''
 
-import sys, cPickle, random
+import sys, re, cPickle, random
 
 '''
 	Extracts the host name and ip addresses from scallion.log and 
@@ -133,28 +121,33 @@ def write_client_info_log(circ_name_map, ident_list):
 		[(circ_id,ip_slug)]
 	@param type_client: a string of the client wanted 
 		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
-	@param num_circs: an integer of the number of timeplots wanted
+	@param num_graphs: an integer of the number of timeplots wanted
 	@return: a string of ts_idents in the correct format for exploratory.py
  		in the form "'circ_id1,ip_slug1' 'circ_id2,ip_slug2' 'circ_id3,ip_slug3' ..." 
 '''
-def input_timeplot_single_client(circ_name_map, ident_list, type_client, num_circs):
+def input_timeplot_single_client(circ_name_map, ident_list, type_client, num_graphs):
 	filt_circ_name_map = {k:v for (k,v) in circ_name_map.iteritems() if type_client in k}
 	totalcircs = sum(len(v) for v in filt_circ_name_map.itervalues())
 	print filt_circ_name_map, totalcircs
 	ident_string = ''
 	repeat = []
 
-	while num_circs > 0:
-		# pick client and specific circuit
+	while num_graphs > 0:
+		# pick client and specific circuit.. may have issues if num_graphs > num_totalcircs
 		client = random.choice(filt_circ_name_map.keys())
 		circ = random.choice(circ_name_map.get(client))
 		# grab ident
 		for item in ident_list:
-			if ((item[0] == circ and item not in repeat)or len(repeat) == totalcircs):
+			if (item[0] == circ and item not in repeat):
 				repeat.append(item)
 				ident = "'" + str(item[0]) + "," + str(item[1]) + "' "
 				ident_string += ident
-				num_circs -= 1
+				num_graphs -= 1
+			# may have issues if num_graphs => num_totalcircs, if so, allow repeation
+			elif (len(repeat) == totalcircs):
+				ident = "'" + str(item[0]) + "," + str(item[1]) + "' "
+				ident_string += ident
+				num_graphs -= 1
 	return ident_string
 
 '''
@@ -167,36 +160,36 @@ def input_timeplot_single_client(circ_name_map, ident_list, type_client, num_cir
 		[(circ_id,ip_slug)]
 	@param type_client: a string of the client wanted 
 		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
-	@param num_circs: an integer of the number of timeplots wanted
+	@param num_graphs: an integer of the number of timeplots wanted
 
 '''
-def input_timeplot_clients(circ_name_map, ident_list, type_client, num_circs):
+def input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs):
 	ident_string_dict = {}
 	if type_client == "-allClients":
 		web = input_timeplot_single_client(circ_name_map, ident_list,
-											'web', num_circs)
+											'web', num_graphs)
 		ident_string_dict['web'] = web
 		print web
 		bulk = input_timeplot_single_client(circ_name_map, ident_list,
-											'bulk', num_circs)
+											'bulk', num_graphs)
 		ident_string_dict['bulk'] = bulk
 		print bulk
 		perf50k = input_timeplot_single_client(circ_name_map, ident_list, 
-											'perfclient50', num_circs)
+											'perfclient50', num_graphs)
 		ident_string_dict['perf50k'] = perf50k
 		print perf50k
 		perf1m = input_timeplot_single_client(circ_name_map, ident_list, 
-											'perfclient1m', num_circs)
+											'perfclient1m', num_graphs)
 		ident_string_dict['perf1m'] = perf1m
 		print perf1m
 		perf5m = input_timeplot_single_client(circ_name_map, ident_list, 
-											'perfclient5m', num_circs)
+											'perfclient5m', num_graphs)
 		ident_string_dict['perf5m'] = perf5m
 		print perf5m
 		return ident_string_dict
 	else:
 		return input_timeplot_single_client(circ_name_map, ident_list,
-											type_client, num_circs)
+											type_client, num_graphs)
 
 
 if __name__ == "__main__":
@@ -204,11 +197,11 @@ if __name__ == "__main__":
 	parsed_pickle = sys.argv[2]
 	nodename = sys.argv[3]
 	type_client = sys.argv[4]
-	num_circs = int(sys.argv[5])
+	num_graphs = int(sys.argv[5])
 
 	ident_list = get_ident_list(parsed_pickle)
 	circ_name_map = circuit_client_map(infile, nodename, ident_list) 
 
-	print input_timeplot_clients(circ_name_map, ident_list, type_client, num_circs)
+	print input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs)
 
 

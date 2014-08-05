@@ -1,3 +1,7 @@
+'''
+	Creates synthetic data from hmm models?
+'''
+
 from hmm_utils import tripleToHMM, compositeTriple
 from sequence_utils import seqSetToList
 from cluster_utils import partition

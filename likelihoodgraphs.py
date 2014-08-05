@@ -42,7 +42,8 @@ if __name__ == "__main__":
 			for m in ms:
 				mean_l = km_means[(k, m)]
 				sfc_zs[m-min(ms),k-min(ks)] = mean_l
-				if mean_l > best_mean and k == 7:
+				# Is the best k always 7 then?
+				if mean_l > best_mean: #and k == 7:
 					best_mean = mean_l
 					best_k = k
 					best_m = m

@@ -10,6 +10,10 @@ cell_direc is either "O" for outgoing, or "I" for incoming. rand_seed determines
 which 1000 series random sample is taken from the record set. ts_ident is the
 identifier of the single series to view, in the format 'circ_id,ip_slug'.
 @author: Julian Applebaum
+
+@author: Shalisa Pattarawuttiwong 
+	Last Edited: 08/04/14
+		-modified doTimeplot to plot multiple line graphs  
 """
 
 from scipy.stats import skew, pearsonr
@@ -241,39 +245,28 @@ def do_horizon(records, direc_key, window_size, ylim=None):
 
 def do_timeplot(records, direc_key, window_size, ts_ident_list):
 	"""
-	Display a time plot and a correlogram for one time series
+	Display a time plot and a correlogram for multiple time series
 	@param records: the list of circuits records containing the series
 	@param direc_key: 'relays_in' for incoming relays, 'relays_out' for
 		outgoing
 	@param window_size: the size of the cell count windows
-	@param ts_ident: the (circ_id, ip_slug) tuple identifying the series
+	@param ts_ident: the list of [(circ_id, ip_slug)]
+				tuples identifying the series
 	"""
 	subplot_size = 421
 
 	fig = plt.figure()
 
+	# have to do this once first to be able to scale the subplots to the same scale
 	cstr, ipstr = ts_ident_list[0].split(",")
-
 	fig.canvas.set_window_title("%i-%i-%i" % (int(cstr), int(ipstr),
 			window_size))
-
 	timeplot = fig.add_subplot(subplot_size)
-		# acorrplot = fig.add_subplot(122)
 	for record in records:
 		if record['ident'] == (int(cstr), int(ipstr)):
-			plt.xlabel("Window # (%i ms windows)" % window_size)
-			plt.ylabel("Outgoing Relay Cell Count")
 			series = record[direc_key]
-
-			# line graphs
 			plt.plot(series)
-				
-			#	timeplot.fill_between(range(0, len(series)), series, [0]*len(series),
-				#	color='grey')
-				# acorr_plot(series, acorrplot)
-
 	subplot_size += 1
-
 
 	for ident in ts_ident_list[1:]:
 		cstr, ipstr = ident.split(",")
@@ -285,8 +278,8 @@ def do_timeplot(records, direc_key, window_size, ts_ident_list):
 		# acorrplot = fig.add_subplot(122)
 		for record in records:
 			if record['ident'] == (int(cstr), int(ipstr)):
-				plt.xlabel("Window # (%i ms windows)" % window_size)
-				plt.ylabel("Outgoing Relay Cell Count")
+				#plt.xlabel("Window # (%i ms windows)" % window_size)
+				#plt.ylabel("Outgoing Relay Cell Count")
 				series = record[direc_key]
 
 				# line graphs
@@ -297,7 +290,8 @@ def do_timeplot(records, direc_key, window_size, ts_ident_list):
 				# acorr_plot(series, acorrplot)
 
 		subplot_size += 1
-	
+	fig.text(0.5, 0.04, 'Window # (%i ms windows)'% window_size, ha='center', va='center')
+	fig.text(0.06, 0.5, 'Outgoing Relay Cell Count', ha='center', va='center', rotation='vertical')
 
 def do_colorplot(records, direc_key, window_size, ax=None, no_chrome=False,
 	sample_size=1000):

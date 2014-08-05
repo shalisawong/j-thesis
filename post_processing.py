@@ -1,17 +1,51 @@
 '''
+	Automates the post-data collection process. 
+		Syntax: python post_processing -getData infile nodename shortname
+		        python post_processing -visualizations graphing_mode shortname
+		        python post_processing.py -clientSeries infile nodename type_client num_graphs shortname
+
+	where infile is a scallion.log file.
+		  nodename is the name of a relay/node (ex: relaymiddle2)
+	      shortname is a string in the format nodename_numclients (ex: rm2_50)
+          graphing_mode is the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
+		  type_client is the name of the client wanted 
+		  		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
+		  num_graphs is an integer of the number of graphs wanted
+
 	@author: Shalisa Pattarawuttiwong
-	7/30/14
+	Last_Edited: 7/30/14
 '''
 
-import sys, subprocess
-import scallion_test
+import sys, re, subprocess
+import timeplot_clients
+
+'''
+	Returns the number of nodes that are relays, non-relays, and a dictionary of 
+	{nodes:number of cells} in the scallion.log. 
+	Allows for picking relay with most cells going through.
+	@param infile: a scallion.log file
+	@return: a dictionary of {nodename:number of cells}
+'''
+def info_scallion(infile):
+	with open(infile, "r") as f:
+		nodes = {}
+		for line in f:
+			split = line.split() # split the log
+			if "CLIENTLOGGING" in line:
+				name = split[4].split("-")[0].replace("[", "")
+				if name not in nodes: 
+					nodes[name] = 1
+				else:
+					num = nodes.get(name) + 1
+					nodes[name] = num
+		return nodes
 
 '''
 	Filters and formats scallion.log data 
-	Syntax: python post_processing -get_data infile nodename shortname
-		where infile is a scallion.log file
-			  nodename is a name of a relay/node
-			  shortname is a string in the format nodename_numclients (ex: rm2_50)
+		Syntax: python post_processing -get_data infile nodename shortname
+	@param infile: a scallion.log file
+	@param nodename: the name of a relay/node
+	@param name: a string in the format nodename_numclients (ex: rm2_50)
 
 '''
 def get_data(infile, nodename, name):
@@ -26,9 +60,9 @@ def get_data(infile, nodename, name):
 
 '''
 	Runs visualization code 
-	Syntax: python post_processing -visualizations graphing_mode shortname
-		where graphing_mode is the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
-			  shortname is a string in the format nodename_numclients (ex: rm2_50)
+		Syntax: python post_processing -visualizations graphing_mode shortname
+	@param graphing_mode: the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
+	@param name: a string in the format nodename_numclients (ex: rm2_50)
 '''
 def run_visualizations(graphing_mode, name):
 	filename = name + "_trimmed_good.pickle"
@@ -53,13 +87,10 @@ def run_visualizations(graphing_mode, name):
 
 '''
 	Runs visualization code which outputs time plots for a specific client
-	Syntax: python post_processing.py -clientSeries infile nodename type_client num_graphs shortname
-		where infile is a scallion.log file
-		      nodename is a name of a relay/node
-			  type_client is the client wanted 
-			  		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
-			  num_graphs is an integer with the number of graphs wanted
-			  shortname is a string in the format nodename_numclients (ex: rm2_50)
+	@param typeclient: name of the client wanted 
+		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
+	@param name: a string in the format nodename_numclients (ex: rm2_50)
+	@param ts_ident: identifier of the single series to view, in the format 'circ_id,ip_slug'.
 '''
 def time_plot_client(type_client, name, ts_ident):
 	filename = name + "_trimmed_good.pickle"
@@ -100,12 +131,15 @@ if __name__ == "__main__":
 		num_graphs = int(sys.argv[5]) # number of graphs wanted
 		name = sys.argv[6]
 
-		ident_list = scallion_test.get_ident_list(name + "_trimmed_good.pickle")
-		circ_name_map = scallion_test.circuit_client_map(infile, nodename, ident_list) 
+		ident_list = timeplot_clients.get_ident_list(name + "_trimmed_good.pickle")
+		circ_name_map = timeplot_clients.circuit_client_map(infile, nodename, ident_list) 
 
 		# allClients for type_client will return a dict of all clients
-		ts_ident = scallion_test.input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs)
+		ts_ident = timeplot_clients.input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs)
 		time_plot_client(type_client, name, ts_ident) 
+
+	else:
+		print "Invalid command"
 		
 		
 		

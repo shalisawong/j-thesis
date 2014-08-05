@@ -17,7 +17,8 @@ The output file is a pickled list in the format:
 ]
 @author: Julian Applebaum
 
-****Edited 7/16/15 with clientlogging modifications**** @author: Shalisa Pattarawuttiwong
+****Edited 7/16/15 with new clientlogging modifications**** 
+@author: Shalisa Pattarawuttiwong
 
 
 """
@@ -42,17 +43,17 @@ def parse_time(time_str):
 	n_milliseconds = int(time_str[-3:])
 	return 1000*n_seconds + n_milliseconds
 
-def parse_line(line="Jan 01 00:20:01.260 [notice] CLIENTLOGGING: 11.0.0.3 <- 11.0.0.9 (2147484638 <- 10637) CIRC 18"):
+def parse_line(line):
 	"""
 	Parse the circuit id, ip slug, and timestamp from a line in
 	the hack_tor log file.
 	@param line: The line
 	@return: A tuple ((circid, ipslug), timestamp)
 	"""
-        # hex vs int????
+    
 	split = line.split(" ")
-	circid = int(split[-1], 16)
-	ipslug = int(split[6], 16)                    # should be pseudonymized and be an int
+	circid = int(split[-1], 16) # change from hex to int
+	ipslug = int(split[6], 16)                
 	time = parse_time(line[0:19])
 	return ((circid, ipslug), time)
 
@@ -87,8 +88,7 @@ if __name__ == "__main__":
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
-
-			if line[44:51] == "CREATED":
+			if line[44:50] == "CREATE":
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
 				# CREATE was sent.
