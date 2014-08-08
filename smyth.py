@@ -43,15 +43,16 @@ def validateTriple(triple):
 	A, B, pi = triple
 	for row in A:
 		if abs(sum(row)-1.0) > .0001:
-			raise ValueError('Row in A does not sum to 1: ' + str(row)) # Could not build a valid HMM! \n %s' %
+			raise ValueError('Row in A does not sum to 1: ' + str(A)) # Could not build a valid HMM! \n %s' %
 	 #tripleToHMM(triple))
 		for a in row:
-			if a < 0: raise ValueError('A is negative: ' + str(a)) #Could not build a valid HMM! \n %s' %
+			if a < 0: raise ValueError('Entry in A is negative: ' + str(A)) #Could not build a valid HMM! \n %s' %
 	#						 tripleToHMM(triple))
 	if abs(sum(pi)-1.0) > .0001:
-		raise ValueError('pi does not sum to 1.') # Could not build a valid HMM! \n %s' %
+		raise ValueError('pi does not sum to 1: ' + str(pi)) # Could not build a valid HMM! \n %s' %
 #	 tripleToHMM(triple))
-	if pi < 0: raise ValueError('pi is negative.') # Could not build a valid HMM!' \n %s' %
+	for p in pi:
+		if p < 0: raise ValueError('pi has negative entry: ' + str(pi)) # Could not build a valid HMM!' \n %s' %
 							# tripleToHMM(triple))
 
 	#raise ValueError("Could not build a valid HMM! \n %s \n %s" % (
@@ -146,9 +147,11 @@ def trainHMM(pair):
 	# change from "or" to "and"?
 	if not has_zero and len(cluster) > 1:
 		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
+		validateTriple((A, B, pi))
 		hmm = tripleToHMM((A, B, pi))
 		hmm.baumWelch(toSequenceSet(cluster))
 		A_p, B_p, pi_p = hmmToTriple(hmm)
+		validateTriple((A_p, B_p, pi_p))
 	else:
 		# If we have a state with zero standard deviation, Baum Welch dies on
 		# a continuous HMM with overflow errors. To fix this, we replace each

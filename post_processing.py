@@ -1,19 +1,19 @@
 '''
-	Automates the post-data collection process. 
-		Syntax: python post_processing -getData infile nodename shortname
-		        python post_processing -visualizations graphing_mode shortname
-		        python post_processing.py -clientSeries infile nodename type_client num_graphs shortname
+Automates the post-data collection process. 
+	Syntax: python post_processing -getData infile nodename shortname
+		    python post_processing -visualizations graphing_mode shortname
+		    python post_processing.py -clientSeries infile nodename type_client num_graphs shortname
 
-	where infile is a scallion.log file.
-		  nodename is the name of a relay/node (ex: relaymiddle2)
-	      shortname is a string in the format nodename_numclients (ex: rm2_50)
-          graphing_mode is the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
-		  type_client is the name of the client wanted 
-		  		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
-		  num_graphs is an integer of the number of graphs wanted
+where infile is a scallion.log file.
+      nodename is the name of a relay/node (ex: relaymiddle2)
+	  shortname is a string in the format nodename_numclients (ex: rm2_50)
+      graphing_mode is the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
+	  type_client is the name of the client wanted 
+			(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
+	  num_graphs is an integer of the number of graphs wanted
 
-	@author: Shalisa Pattarawuttiwong
-	Last_Edited: 7/30/14
+@author: Shalisa Pattarawuttiwong
+Last_Edited: 7/30/14
 '''
 
 import sys, re, subprocess
