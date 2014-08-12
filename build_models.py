@@ -32,6 +32,7 @@ if __name__ == "__main__":
 	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
 	out_series = [record['relays_out'] for record in records]
+	# log transformation and trim inactive
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
 	print "%i series after preprocessing" % len(filtered)

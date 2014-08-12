@@ -79,7 +79,7 @@ if __name__ == "__main__":
 			fig.tight_layout()
 		elif mode == "-surface":
 			ax = fig.add_subplot(111)
-			plt.title("Mean Log Likelihood vs. k and m (22 trials)")
+			plt.title("Mean Log Likelihood vs. k and m")
 			plt.xlabel("k")
 			plt.ylabel("m")
 			im = plt.imshow(sfc_zs, extent=[min(ks), max(ks), max(ms), min(ms)],

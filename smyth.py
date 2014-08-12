@@ -43,20 +43,13 @@ def validateTriple(triple):
 	A, B, pi = triple
 	for row in A:
 		if abs(sum(row)-1.0) > .0001:
-			raise ValueError('Row in A does not sum to 1: ' + str(A)) # Could not build a valid HMM! \n %s' %
-	 #tripleToHMM(triple))
+			raise ValueError('Row in A does not sum to 1: ' + str(A)) 
 		for a in row:
-			if a < 0: raise ValueError('Entry in A is negative: ' + str(A)) #Could not build a valid HMM! \n %s' %
-	#						 tripleToHMM(triple))
+			if a < 0: raise ValueError('Entry in A is negative: ' + str(A)) 
 	if abs(sum(pi)-1.0) > .0001:
-		raise ValueError('pi does not sum to 1: ' + str(pi)) # Could not build a valid HMM! \n %s' %
-#	 tripleToHMM(triple))
+		raise ValueError('pi does not sum to 1: ' + str(pi)) 
 	for p in pi:
-		if p < 0: raise ValueError('pi has negative entry: ' + str(pi)) # Could not build a valid HMM!' \n %s' %
-							# tripleToHMM(triple))
-
-	#raise ValueError("Could not build a valid HMM! \n %s \n %s" % (
-	#	tripleToHMM(triple), label_seqs))
+		if p < 0: raise ValueError('pi has negative entry: ' + str(pi)) 
 
 
 def correctDMMTransitions(A):
@@ -104,15 +97,40 @@ def smythEmissionDistribution(pair):
 	number of states -- if we can only have m' distinct observation values, then
 	the distribution for a m' state HMM is returned.
 
-	@param pair: A tuple of the form (S: list of sequences, m: int)
-	@return: The corresponding emission distribution encoded as a list
-		of (mu, stddev) pairs
+	@param pair: A tuple of the form (S: list of sequences, target_m: int)
+	@return:  (B, labels, has_zero), where:
+	   * S', obs = concat(S), set(S)
+	   * m' = min(target_m, len(obs))
+	   * [C_0,...,C_{m'-1}] = result of clustering S' with k-means.
+	   * labels: tells which cluster each item in merged goes into; i.e.,
+	       labels[i] = j, where S'[i] belongs to cluster C_j.
+	   * B[i] = (mean(C_i), stddev(C_i)).
+	   * has_zero = True if there is i such that B[i][1] ~= 0.0.
 	"""
 	S, target_m = pair
+	# merged list of 1d vectors, set of distinct observation values
 	merged, distinct = prepareSeqs(S)
+
+	# m_prime is min of either target_m or the number of distinct obs values 
 	m_prime = min(target_m, len(distinct))
+
+	# k-means partitions merged into m_prime clusters [C_0,...,C_{m'-1}].
+	# centroids = [c_0,...,c_{m'-1}]: cluster centers; i.e., c_i is the center
+	#   of C_j.
+	# labels: tells which cluster each item in merged goes into; i.e.,
+	#   labels[i] = j, where merged[i] belongs to cluster C_j.
+	# inertia: sum of distances of samples to closest cluster center
+	#   inertia = sum_{i=0}^{m'-1}(sum_{x in C_i} dist(x, c_i)).
 	centroids, labels, inertia = k_means(merged, m_prime, init='k-means++')
+
+	# takes labels and arranges merged into 
+	# a list of lists, each of which contains the series from one cluster
+	# clusters = [C_0,..,C_{m'-1}]
 	clusters = partition(merged, labels)
+
+	# Compute (B, labels, has_zero), where
+	#   B[i] = (mean(C_i), stddev(C_i)).
+	#   has_zero = True if there is i such that B[i][1] ~= 0.0.
 	B = []
 	has_zero = False
 	for cluster in clusters:
@@ -122,6 +140,7 @@ def smythEmissionDistribution(pair):
 		B.append((mu, stddev))
 		if stddev < 0.001:
 			has_zero = True
+
 	return (B, labels, has_zero)
 
 def trainHMM(pair):
@@ -132,8 +151,9 @@ def trainHMM(pair):
 	then the resulting model will have target_m states. Otherwise, the model
 	will have one state per non-empty cluster for however many clusters could
 	be created
+
 	A - Transition Probability matrix (N x N) 
-	B - Ovservation Symbol Probablilty Distribution (N x M)
+	B - Observation Symbol Probablilty Distribution (N x M)
 	pi - Initial State Distribution Matrix (N x 1)
 	(N: # states in HMM, M: # observation symbols)
 
@@ -141,17 +161,30 @@ def trainHMM(pair):
 	@return: The HMM as a (A, B, pi) triple
 	"""
 	cluster, target_m = pair
+	# get emission distribution B = [(mu, stddev), ...]
 	B, labels, has_zero = smythEmissionDistribution((cluster, target_m))
+	# also the number of clusters (created by k-means)
 	m_prime = len(B)
-	pi = [1.0/m_prime] * m_prime
+	pi = [1.0/m_prime] * m_prime # ex: if m_prime = 4, pi = [0.25, 0.25, 0.25, 0.25]
 	# change from "or" to "and"?
-	if not has_zero and len(cluster) > 1:
+	# if the stddev is not zero and there is more than 1 item in the cluster,
+	# if not has_zero and len(cluster) > 1:
+		# m_prime x m_prime matrix filled with 1.0/m_prime -> each row sums up to 1
+
+	# Make sure stddev > EPSILON
+	B_stddev = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+
+
+	# error if len(cluster) = 1. 
+	if len(cluster) > 1:
 		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
-		validateTriple((A, B, pi))
-		hmm = tripleToHMM((A, B, pi))
+		validateTriple((A, B_stddev, pi))
+		hmm = tripleToHMM((A, B_stddev, pi))
 		hmm.baumWelch(toSequenceSet(cluster))
 		A_p, B_p, pi_p = hmmToTriple(hmm)
 		validateTriple((A_p, B_p, pi_p))
+
+		
 	else:
 		# If we have a state with zero standard deviation, Baum Welch dies on
 		# a continuous HMM with overflow errors. To fix this, we replace each
@@ -159,10 +192,12 @@ def trainHMM(pair):
 		# Model on these sequences. We don't get to reestimate B at all, but
 		# we do get to reestimate the dynamics. This heuristic is only
 		# employed for single element clusters.
+
+		# from hmm_utils. Returns an HMM built from matrices
 		hmm = discreteDefaultDMM(min(labels), max(labels))
 		seq_lens = [len(seq) for seq in cluster]
 		offset = 0
-		label_seqs = [[] for seq in cluster]
+		label_seqs = [[] for seq in cluster] #initalize label_seqs
 		seq_idx = 0
 		for i, label in enumerate(labels):
 			if i == seq_lens[0] + offset:
@@ -173,7 +208,7 @@ def trainHMM(pair):
 		hmm.baumWelch(toSequenceSet(label_seqs, domain))
 		A_p0, pi_p = getDynamics(hmm)
 		A_p = correctDMMTransitions(A_p0)
-		B_p = B
+		B_p = B_stddev
 
 	# According to the GHMM mailing list, a very small standard deviation
 	# can cause underflow errors when attempting to compute log likelihood.
@@ -182,8 +217,13 @@ def trainHMM(pair):
   	# latency, etc.), it's not unreasonable to assume that "uniform"
 	# measurements could have some jitter. Any extra variance added to the
 	# cluster can always be corrected away with another round of Baum Welch.
-	if len(cluster) == 1:
-		B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+	
+	# EPSILON = .5. b[1] = stddev
+	# make this if to encompass len(clusters) > 1??? and has_zero
+        #if len(cluster) == 1:
+	#	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+
+	
 	triple = (A_p, B_p, pi_p)
 	validateTriple(triple)
 	return triple
@@ -294,11 +334,14 @@ class HMMCluster():
 			init_fn = randomDefaultTriple
 		printAndFlush("Generating default HMMs (parallel)...")
 		start = clock()
+		# inital hmm?
 		self.init_hmms = self._doMap(init_fn,
 			(([s], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
 		printAndFlush("done")
+		# n = len(S)
 		n_batchitems = (self.n)*(self.n+1)/2 - self.n
+		
 		condensed = []
 		printAndFlush("Computing distance matrix (parallel)...")
 		printAndFlush("Processing %i batch items" % n_batchitems)
@@ -404,16 +447,21 @@ class HMMCluster():
 		Train a HMM mixture on each of the k-partitions by separately training
 		an HMM on each cluster.
 		"""
-		batch_items = []
-		cluster_sizes = []
-		seq_lens = []
+		batch_items = [] 
+		cluster_sizes = [] # size of clusters
+		seq_lens = [] # len of time series replaces actual times series
+			      # e.g. [[1, 2, 3, 4],[2,3],[3,2,4,1,1]] -> [4, 2, 5]
 		# Build a list of mapping items to submit as a bulk job
+		# for each k_value (predicted range of clusters)given
 		for k in self.k_values:
+			# Grab the partition with time series split into k clusters 
 			partition = self.partitions[k]
+			# for each cluster in the partition
 			for cluster in partition:
 				cluster_sizes.append(len(cluster))
 				seq_lens.append(map(lambda s: len(s), cluster))
 				batch_items.append((cluster, self.target_m))
+		# initialize components[k]
 		for k in self.k_values:
 			self.components[k] = {
 				'hmm_triples': [],

@@ -77,5 +77,6 @@ def discreteDefaultDMM(min_label, max_label):
 	for i in xrange(0, alpha_len):
 		B[i, i] = 1
 	pi = [1.0/alpha_len]*alpha_len
+	# a discrete distribution over an alphabet
 	distr = ghmm.DiscreteDistribution(sigma)
 	return ghmm.HMMFromMatrices(sigma, distr, A, B, pi)
