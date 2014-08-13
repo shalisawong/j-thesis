@@ -50,11 +50,17 @@ def flatten(lists):
 	return reduce(list.__add__, lists, [])
 
 def trim_inactive(series):
+	'''
+	Edited on 8/12/14 to include ip_address
+	@param series: A tuple of (time series, ip address)
+	'''
+
 	tail = len(series)
 	lead_idx = 0
 	trail_idx = tail
 	found_nonzero = False
-	for idx, obs in enumerate(series):
+
+	for idx, obs in enumerate(series[0]):
 		if obs < 2:
 			if trail_idx == tail:
 				trail_idx = idx
@@ -64,3 +70,6 @@ def trim_inactive(series):
 			trail_idx = tail
 			found_nonzero = True
 	return series[lead_idx:trail_idx]
+
+
+

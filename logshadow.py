@@ -30,7 +30,7 @@ syntax: python logshadow.py infile nodename outfile
 
 from datetime import datetime
 from pprint import pprint
-import sys, re
+import sys, re, cPickle
 
 '''
 	Pseudonymizes the ip addresses.
@@ -82,8 +82,8 @@ if (__name__ == "__main__"):
 	nodename = sys.argv[2]  # nodename = name of relay/node wanted --
                             # in the example above, this is 2.relay
 	outfile = sys.argv[3]
+	outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle" 
 
-#	f_name = "tor_fmt_" + nodename + ".log"
 	ip_dict = {}
 	ip_pseudo = 1
 
@@ -118,6 +118,8 @@ if (__name__ == "__main__"):
 	
 	print "Done\n"
 	# save pseudo ip map
-	#with open("pseudo_dict_scallion50.log","w") as dict_out:
-	#	dict_out.write(str(ip_dict))
+	with open(outpickle, "w") as outfile:
+		ip_dict_flip = {v:k for k, v in ip_dict.items()}
+		cPickle.dump(ip_dict_flip, outfile, protocol=2)
+		print "Dumping ip address dictionary to %s" % outpickle
 

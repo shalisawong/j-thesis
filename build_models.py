@@ -13,13 +13,14 @@ from os.path import isfile
 import sys, cPickle, logging, json
 
 def log_series(series):
-	return map(lambda o: log(1+o), series)
+	return ([log(1+o) for o in series[0]], series[1])
+	#return map(lambda o: log(1+o), series[0])
 
 def preprocess(series):
 	return map(lambda s: log_series(trim_inactive(s)), series)
 
 def filter_criteria(series):
-	return len(series) > 0 and std(series) > 0
+	return len(series[0]) > 0 and std(series[0]) > 0
 
 def filter_processed(series):
 	return filter(filter_criteria, series)
@@ -31,7 +32,8 @@ if __name__ == "__main__":
 		cfg = json.load(cfg_file)
 	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
-	out_series = [record['relays_out'] for record in records]
+	# out_series = [([time_series], ip_addr)]
+	out_series = [(record['relays_out'], record['ident'][1]) for record in records]
 	# log transformation and trim inactive
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
@@ -45,13 +47,15 @@ if __name__ == "__main__":
 			if not isfile(outpath):
 				print "## Target m = %i ##" % target_m
 				if cfg['beta'] < 1:
-					train, test = train_test_split(filtered,
+					train_array, test = train_test_split(filtered,
 						train_size=cfg['beta'], random_state=rand_seed)
+					train = [(series[0],series[1])for series in train_array]
 				else:
 					train = filtered
 				print "Training on %i time series" % len(train)
 				smyth_out = HMMCluster(train, target_m, cfg['min_k'],
 					cfg['max_k'], 'hmm', 'smyth', 'hierarchical', cfg['n_jobs'])
+				"""
 				try:
 					smyth_out.model()
 				except Exception, e:
@@ -59,6 +63,8 @@ if __name__ == "__main__":
 						(trial_num, target_m)
 					print_exc()
 					continue
+				"""
+				smyth_out.model()
 				trial = {
 					'components': smyth_out.components,
 					# 'composites': smyth_out.composites,

@@ -53,7 +53,8 @@ def parse_line(line):
     
 	split = line.split(" ")
 	circid = int(split[-1], 16) # change from hex to int
-	ipslug = int(split[6], 16)                
+	ipslug = int(split[6], 16) 
+	print ipslug
 	time = parse_time(line[0:19])
 	return ((circid, ipslug), time)
 

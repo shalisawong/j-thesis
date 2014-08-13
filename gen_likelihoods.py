@@ -25,7 +25,7 @@ if __name__ == "__main__":
 	print "done"
 	with open(records_path) as records_file:
 		records = cPickle.load(records_file)['records']
-		out_series = [record['relays_out'] for record in records]
+		out_series = [(record['relays_out'], record['ident'][1]) for record in records]
 		processed = preprocess(out_series)
 		filtered = filter_processed(processed)
 		batch_items = []
@@ -34,8 +34,9 @@ if __name__ == "__main__":
 			rand_seed = result['rand_seed']
 			beta = result['beta']
 			target_m = result['target_m']
-			train, test = train_test_split(filtered, train_size=beta,
-				random_state=rand_seed)
+			train, test_array = train_test_split(filtered,
+				train_size=beta, random_state=rand_seed)
+			test = [series[0] for series in test_array]
 			for k, comp in result['components'].iteritems():
 				triple = compositeTriple(comp)
 				batch_items.append((k, target_m, triple, rand_seed, list(test)))

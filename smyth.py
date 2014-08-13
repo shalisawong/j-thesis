@@ -31,7 +31,7 @@ import sys, cPickle
 
 # Minimum standard deviation for a state in the clustering phase. Anything
 # less than this leaves log likelihood prone to underflow errors.
-EPSILON = .5
+EPSILON = .25
 
 def validateTriple(triple):
 	"""
@@ -50,6 +50,9 @@ def validateTriple(triple):
 		raise ValueError('pi does not sum to 1: ' + str(pi)) 
 	for p in pi:
 		if p < 0: raise ValueError('pi has negative entry: ' + str(pi)) 
+	for (_, stddev) in B:
+		if stddev < .1:
+			raise ValueError('B has zero std. dev. entry: ' + str(B))
 
 
 def correctDMMTransitions(A):
@@ -145,8 +148,10 @@ def smythEmissionDistribution(pair):
 
 def trainHMM(pair):
 	"""
-	Given a pair (S: list of sequences, target_m: int), initialize a
-	HMM triple with at most target_m states using Smyth's "default" method.
+	Given a pair (S: list of sequences, target_m: int), train an HMM triple on S
+	with Baum-Welch with at most target_m states using Smyth's "default" method
+	for the initial HMM.
+
 	If the observations in S can be clustered into target_m non-empty cluster,
 	then the resulting model will have target_m states. Otherwise, the model
 	will have one state per non-empty cluster for however many clusters could
@@ -172,19 +177,20 @@ def trainHMM(pair):
 		# m_prime x m_prime matrix filled with 1.0/m_prime -> each row sums up to 1
 
 	# Make sure stddev > EPSILON
-	B_stddev = map(lambda b: (b[0], max(b[1], EPSILON)), B)
+	B = map(lambda b: (b[0], max(b[1], EPSILON)), B)
 
 
 	# error if len(cluster) = 1. 
-	if len(cluster) > 1:
-		A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
-		validateTriple((A, B_stddev, pi))
-		hmm = tripleToHMM((A, B_stddev, pi))
-		hmm.baumWelch(toSequenceSet(cluster))
-		A_p, B_p, pi_p = hmmToTriple(hmm)
-		validateTriple((A_p, B_p, pi_p))
+#	if len(cluster) > 1:
+	A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
+	hmm = tripleToHMM((A, B, pi))
+	hmm.baumWelch(toSequenceSet(cluster))
+	A_p, B_p, pi_p = hmmToTriple(hmm)
+	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B_p)
+	validateTriple((A_p, B_p, pi_p))
+	return ((A_p, B_p, pi_p))
 
-		
+	'''	
 	else:
 		# If we have a state with zero standard deviation, Baum Welch dies on
 		# a continuous HMM with overflow errors. To fix this, we replace each
@@ -223,10 +229,10 @@ def trainHMM(pair):
         #if len(cluster) == 1:
 	#	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
 
-	
-	triple = (A_p, B_p, pi_p)
-	validateTriple(triple)
-	return triple
+	'''
+	# triple = (A_p, B_p, pi_p)
+	# validateTriple(triple)
+	# return triple
 
 def randomDefaultTriple(pair):
 	pass
@@ -248,9 +254,11 @@ def symDistance(args):
 	hmm2 = tripleToHMM(triple2)
 	s1_m2 = hmm2.loglikelihood(toSequence(seq1))
 	s2_m1 = hmm1.loglikelihood(toSequence(seq2))
+	"""
 	if s1_m2 > 0:
 		print seq1, hmm2
-	assert s1_m2 <= 0, ("s1_m2=%f" % s1_m2)
+	"""
+	assert s1_m2 <= 0, ("s1_m2=%f\nseq1=%s\nhmm2=%s\n" % (s1_m2, seq1, hmm2))
 	assert s2_m1 <= 0, ("s2_m1=%f" % s2_m1)
 	return (s1_m2 + s2_m1)/2.0
 
@@ -314,8 +322,8 @@ class HMMCluster():
 	def _getHMMBatchItems(self):
 		for i in xrange(0, self.n):
 			for j in xrange(1+i, self.n):
-				pair_1 = (self.S[i], self.init_hmms[i])
-				pair_2 = (self.S[j], self.init_hmms[j])
+				pair_1 = (self.S[i][0], self.init_hmms[i])
+				pair_2 = (self.S[j][0], self.init_hmms[j])
 				yield (pair_1, pair_2)
 
 	def _doMap(self, func, items):
@@ -328,6 +336,9 @@ class HMMCluster():
 		"""
 		Compute the distance matrix using Rabiner's HMM distance measure.
 		"""
+
+		# Train an HMM for each sequence in S in parallel.  hmm_init and init_fn
+		# are poor name choices and need to be changed.
 		if self.hmm_init == 'smyth':
 			init_fn = trainHMM
 		elif self.hmm_init == 'random':
@@ -336,12 +347,12 @@ class HMMCluster():
 		start = clock()
 		# inital hmm?
 		self.init_hmms = self._doMap(init_fn,
-			(([s], self.target_m) for s in self.S))
+			(([s[0]], self.target_m) for s in self.S))
 		self.times['init_hmms'] = clock() - start
 		printAndFlush("done")
-		# n = len(S)
+
+		# Compute distance matrix in parallel (in batches of 500,000).
 		n_batchitems = (self.n)*(self.n+1)/2 - self.n
-		
 		condensed = []
 		printAndFlush("Computing distance matrix (parallel)...")
 		printAndFlush("Processing %i batch items" % n_batchitems)
@@ -361,6 +372,7 @@ class HMMCluster():
 		shifted = map(lambda l: -1*l, condensed)
 		printAndFlush("Minimum distance: %f" % min(shifted))
 		printAndFlush("Maximum distance: %f" % max(shifted))
+
 		return array(shifted, float32)
 
 	# def _getEditDistMatrix(self):
@@ -451,22 +463,30 @@ class HMMCluster():
 		cluster_sizes = [] # size of clusters
 		seq_lens = [] # len of time series replaces actual times series
 			      # e.g. [[1, 2, 3, 4],[2,3],[3,2,4,1,1]] -> [4, 2, 5]
+		cluster_ips = []
 		# Build a list of mapping items to submit as a bulk job
 		# for each k_value (predicted range of clusters)given
 		for k in self.k_values:
+			
 			# Grab the partition with time series split into k clusters 
 			partition = self.partitions[k]
-			# for each cluster in the partition
 			for cluster in partition:
-				cluster_sizes.append(len(cluster))
-				seq_lens.append(map(lambda s: len(s), cluster))
-				batch_items.append((cluster, self.target_m))
+				series = []
+				ips = []
+				for item in cluster:
+					series.append(item[0])
+					ips.append(item[1])
+				cluster_sizes.append(len(series))
+				seq_lens.append(map(lambda s: len(s), series))
+				batch_items.append((series, self.target_m))
+				cluster_ips.append(ips)
 		# initialize components[k]
 		for k in self.k_values:
 			self.components[k] = {
 				'hmm_triples': [],
 				'cluster_sizes': [],
-				'seq_lens': []
+				'seq_lens': [],
+				'cluster_ips': []
 			}
 		printAndFlush("Training components on clusters (parallel)...")
 		start = clock()
@@ -480,9 +500,11 @@ class HMMCluster():
 				cluster_size = cluster_sizes[idx]
 				inclust_seq_lens = seq_lens[idx]
 				hmm_triple = hmm_triples[idx]
+				cluster_ip = cluster_ips[idx]
 				self.components[k]['hmm_triples'].append(hmm_triple)
 				self.components[k]['cluster_sizes'].append(cluster_size)
 				self.components[k]['seq_lens'].append(inclust_seq_lens)
+				self.components[k]['cluster_ips'].append(cluster_ip)
 				idx += 1
 			self.composites[k] = compositeTriple(self.components[k])
 		print "done"
