@@ -64,7 +64,7 @@ if __name__ == "__main__":
 	with open(results_path) as results_file, open(ip_addr_pickle) as ip_file:
 		trial = cPickle.load(results_file)
 		pseudo_ip_dict = cPickle.load(ip_file)
-		print trial['rand_seed']
+		print "seed:", trial['rand_seed']
 		pprint(trial['times'])
 		model = trial['components'][k]
 		print "**** Models ****"

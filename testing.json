@@ -4,7 +4,7 @@
 	"first_seed": 0,
 	"n_jobs": null,
 	"min_k": 3,
-	"max_k": 4,
+	"max_k": 10,
 	"min_m": 3,
 	"max_m": 10,
 	"beta": 0.5,

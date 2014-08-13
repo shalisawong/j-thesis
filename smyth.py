@@ -181,7 +181,7 @@ def trainHMM(pair):
 
 
 	# error if len(cluster) = 1. 
-#	if len(cluster) > 1:
+	#if len(cluster) > 1:
 	A = uniformMatrix(m_prime, m_prime, 1.0/m_prime)
 	hmm = tripleToHMM((A, B, pi))
 	hmm.baumWelch(toSequenceSet(cluster))
@@ -214,7 +214,7 @@ def trainHMM(pair):
 		hmm.baumWelch(toSequenceSet(label_seqs, domain))
 		A_p0, pi_p = getDynamics(hmm)
 		A_p = correctDMMTransitions(A_p0)
-		B_p = B_stddev
+		B_p = B
 
 	# According to the GHMM mailing list, a very small standard deviation
 	# can cause underflow errors when attempting to compute log likelihood.
@@ -229,10 +229,11 @@ def trainHMM(pair):
         #if len(cluster) == 1:
 	#	B_p = map(lambda b: (b[0], max(b[1], EPSILON)), B)
 
+	
+	triple = (A_p, B_p, pi_p)
+	validateTriple(triple)
+	return triple
 	'''
-	# triple = (A_p, B_p, pi_p)
-	# validateTriple(triple)
-	# return triple
 
 def randomDefaultTriple(pair):
 	pass
