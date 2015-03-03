@@ -25,6 +25,9 @@ Jan 01 00:19:09.350 [notice] CLIENTLOGGING: RELAY 1 -> 2 CIRC 18
 
 syntax: python logshadow.py infile nodename outfile
 
+****Edited 3/2/15 ****
+@author Shalisa Pattarawuttiwong
+Since tor itself pseudonymizes ip addresses, don't need ip_replace
 
 """
 
@@ -82,10 +85,10 @@ if (__name__ == "__main__"):
 	nodename = sys.argv[2]  # nodename = name of relay/node wanted --
                             # in the example above, this is 2.relay
 	outfile = sys.argv[3]
-	outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle" 
+	outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle"
 
-	ip_dict = {}
-	ip_pseudo = 1
+	# ip_dict = {}
+	# ip_pseudo = 1
 
 	with open(infile, "r") as f_in, open(outfile, "w") as f_out:
 		print "Reading file..."
@@ -103,23 +106,24 @@ if (__name__ == "__main__"):
 
 			if ("CLIENTLOGGING" in line):
 				# pseudonomyize ip addresses
-				split, ip_dict, ip_pseudo = ip_replace(line, ip_dict, ip_pseudo)
+				# split, ip_dict, ip_pseudo = ip_replace(line, ip_dict, ip_pseudo)
+				split = line.split()
 
-				name = split[4].split("-")[0].replace("[", "") # get the name of relay/node without the IP addr
+				name = split[4].split("~")[0].replace("[", "") # get the name of relay/node without the IP addr
 				if (name == nodename):
 
 					# get virtual time
-					hours, minutes, seconds, nano = [int(x) for x in split[2].split(":")]
+					hours, minutes, seconds, nano = [int(x) for x in split[2].replace(".",":").split(":")]
 					loglevel = "[notice]"
 					date = datetime(2013, 1, 1, hours, minutes, seconds, nano/1000)
 					date_fmt = date.strftime("%b %d %H:%M:%S.%f")[0:-3]
 					tor_log = date_fmt + " " + loglevel + " " + " ".join(split[6:]) + "\n"
 					f_out.write(tor_log)
-	
+
 	print "Done\n"
 	# save pseudo ip map
-	with open(outpickle, "w") as outfile:
-		ip_dict_flip = {v:k for k, v in ip_dict.items()}
-		cPickle.dump(ip_dict_flip, outfile, protocol=2)
-		print "Dumping ip address dictionary to %s" % outpickle
+	# with open(outpickle, "w") as outfile:
+	# 	ip_dict_flip = {v:k for k, v in ip_dict.items()}
+	# 	cPickle.dump(ip_dict_flip, outfile, protocol=2)
+	# 	print "Dumping ip address dictionary to %s" % outpickle
 

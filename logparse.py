@@ -17,7 +17,7 @@ The output file is a pickled list in the format:
 ]
 @author: Julian Applebaum
 
-****Edited 7/16/15 with new clientlogging modifications**** 
+****Edited 7/16/15 with new clientlogging modifications****
 @author: Shalisa Pattarawuttiwong
 
 
@@ -50,11 +50,10 @@ def parse_line(line):
 	@param line: The line
 	@return: A tuple ((circid, ipslug), timestamp)
 	"""
-    
+
 	split = line.split(" ")
 	circid = int(split[-1], 16) # change from hex to int
-	ipslug = int(split[6], 16) 
-	print ipslug
+	ipslug = int(split[6], 16)
 	time = parse_time(line[0:19])
 	return ((circid, ipslug), time)
 

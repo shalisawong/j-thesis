@@ -1,5 +1,5 @@
 '''
-Automates the post-data collection process. 
+Automates the post-data collection process.
 	Syntax: python post_processing -getData infile nodename shortname
 		    python post_processing -visualizations graphing_mode shortname
 		    python post_processing.py -clientSeries infile nodename type_client num_graphs shortname
@@ -8,20 +8,21 @@ where infile is a scallion.log file.
       nodename is the name of a relay/node (ex: relaymiddle2)
 	  shortname is a string in the format nodename_numclients (ex: rm2_50)
       graphing_mode is the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
-	  type_client is the name of the client wanted 
+	  type_client is the name of the client wanted
 			(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
 	  num_graphs is an integer of the number of graphs wanted
 
 @author: Shalisa Pattarawuttiwong
-Last_Edited: 7/30/14
+Last_Edited: 3/2/15
 '''
 
 import sys, re, subprocess
 import timeplot_clients
+import operator
 
 '''
-	Returns the number of nodes that are relays, non-relays, and a dictionary of 
-	{nodes:number of cells} in the scallion.log. 
+	Returns the number of nodes that are relays, non-relays, and a dictionary of
+	{nodes:number of cells} in the scallion.log.
 	Allows for picking relay with most cells going through.
 	@param infile: a scallion.log file
 	@return: a dictionary of {nodename:number of cells}
@@ -32,16 +33,16 @@ def info_scallion(infile):
 		for line in f:
 			split = line.split() # split the log
 			if "CLIENTLOGGING" in line:
-				name = split[4].split("-")[0].replace("[", "")
-				if name not in nodes: 
+				name = split[4].split("~")[0].replace("[", "")
+				if name not in nodes:
 					nodes[name] = 1
 				else:
 					num = nodes.get(name) + 1
 					nodes[name] = num
-		return nodes
+		return sorted(nodes.items(), key=operator.itemgetter(1))
 
 '''
-	Filters and formats scallion.log data 
+	Filters and formats scallion.log data
 		Syntax: python post_processing -get_data infile nodename shortname
 	@param infile: a scallion.log file
 	@param nodename: the name of a relay/node
@@ -51,15 +52,15 @@ def info_scallion(infile):
 def get_data(infile, nodename, name):
 	logshadow_in = "python logshadow.py " + infile + " " + nodename + " " + name + "_tor_fmt.log"
 	subprocess.call(logshadow_in, shell=True)
-	logparse_in = "python logparse.py " + name + "_tor_fmt.log " + name + "_parsed.pickle" 
+	logparse_in = "python logparse.py " + name + "_tor_fmt.log " + name + "_parsed.pickle"
 	subprocess.call(logparse_in, shell=True)
-	window_in = "python window.py " + name + "_parsed.pickle " + name + "_windowed.pickle 5000" 
+	window_in = "python window.py " + name + "_parsed.pickle " + name + "_windowed.pickle 5000"
 	subprocess.call(window_in, shell=True)
-	trim_in = "python trim_series.py " + name + "_windowed.pickle " + name + "_trimmed_good.pickle " + name + "_trimmed_bad.pickle" 
+	trim_in = "python trim_series.py " + name + "_windowed.pickle " + name + "_trimmed_good.pickle " + name + "_trimmed_bad.pickle"
 	subprocess.call(trim_in, shell=True)
 
 '''
-	Runs visualization code 
+	Runs visualization code
 		Syntax: python post_processing -visualizations graphing_mode shortname
 	@param graphing_mode: the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
 	@param name: a string in the format nodename_numclients (ex: rm2_50)
@@ -67,27 +68,27 @@ def get_data(infile, nodename, name):
 def run_visualizations(graphing_mode, name):
 	filename = name + "_trimmed_good.pickle"
 	if graphing_mode  == "-summarize":
-		sum_in = "python exploratory.py -summarize " + filename + " O" 
+		sum_in = "python exploratory.py -summarize " + filename + " O"
 		subprocess.call(sum_in, shell=True)
 	elif graphing_mode == "-horizon":
-		horizon_in = "python exploratory.py -horizon " + filename + " O 50" 
+		horizon_in = "python exploratory.py -horizon " + filename + " O 50"
 		subprocess.call(horizon_in, shell=True)
 	elif graphing_mode == "-colorplots":
-		colorplots_in = "python exploratory.py -colorplots " + filename + " O 50" 
+		colorplots_in = "python exploratory.py -colorplots " + filename + " O 50"
 		subprocess.call(colorplots_in, shell=True)
 	elif graphing_mode == "-allPlots":
-		print "\nPlotting Summary Plots..."	
+		print "\nPlotting Summary Plots..."
 		run_visualizations("-summarize", name)
-		print "\nPlotting Horizon Plot..."	
+		print "\nPlotting Horizon Plot..."
 		run_visualizations("-horizon", name)
-		print "\nPlotting Color Plot..."	
+		print "\nPlotting Color Plot..."
 		run_visualizations("-colorplots", name)
 	else:
 		print "ERROR: Invalid graphing mode selected"
 
 '''
 	Runs visualization code which outputs time plots for a specific client
-	@param typeclient: name of the client wanted 
+	@param typeclient: name of the client wanted
 		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
 	@param name: a string in the format nodename_numclients (ex: rm2_50)
 	@param ts_ident: identifier of the single series to view, in the format 'circ_id,ip_slug'.
@@ -96,7 +97,7 @@ def time_plot_client(type_client, name, ts_ident):
 	filename = name + "_trimmed_good.pickle"
 
 	if type_client == "-allClients":
-		print "\nPlotting WebClients..."	
+		print "\nPlotting WebClients..."
 		time_plot_client('web', name, ts_ident.get('web'))
 		print "\nPlotting BulkClients..."
 		time_plot_client('bulk', name, ts_ident.get('bulk'))
@@ -120,7 +121,7 @@ if __name__ == "__main__":
 		get_data(infile, nodename, name)
 
 	elif command == "-visualizations":
-		graphing_mode = sys.argv[2] 
+		graphing_mode = sys.argv[2]
 		name = sys.argv[3] # name in the format nodename_numclients
 		run_visualizations(graphing_mode, name)
 
@@ -132,20 +133,20 @@ if __name__ == "__main__":
 		name = sys.argv[6]
 
 		ident_list = timeplot_clients.get_ident_list(name + "_trimmed_good.pickle")
-		circ_name_map = timeplot_clients.circuit_client_map(infile, nodename, ident_list) 
+		circ_name_map = timeplot_clients.circuit_client_map(infile, nodename, ident_list)
 
 		# allClients for type_client will return a dict of all clients
 		ts_ident = timeplot_clients.input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs)
-		time_plot_client(type_client, name, ts_ident) 
+		time_plot_client(type_client, name, ts_ident)
 
 	else:
 		print "Invalid command"
-		
-		
-		
 
 
 
 
 
-		
+
+
+
+
