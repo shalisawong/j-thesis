@@ -1,6 +1,7 @@
 {
-	"inpath": "rg1_tiny_trimmed_good.pickle",
-	"outdir": "rg1_tiny",
+
+	"inpath": "rg9_trimmed_good.pickle",
+	"outdir": "rg9",
 	"first_seed": 0,
 	"n_jobs": null,
 	"min_k": 3,
@@ -8,6 +9,9 @@
 	"min_m": 3,
 	"max_m": 10,
 	"beta": 0.5,
-	"n_trials": 1
-
+	"n_trials": 1,
+   	"cluster_alg" : "hierarchical",
+    	"dist_measure" : "euclidean",
+    	"arffpath" : "./seriesdata.arff",
+    	"cluster_outpath" : "./clusters.json"
 }

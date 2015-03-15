@@ -33,7 +33,7 @@ Since tor itself pseudonymizes ip addresses, don't need ip_replace
 
 from datetime import datetime
 from pprint import pprint
-import sys, re, cPickle
+import sys, re, cPickle, csv
 
 '''
 	Pseudonymizes the ip addresses.
@@ -87,18 +87,18 @@ if (__name__ == "__main__"):
 	outfile = sys.argv[3]
 	outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle"
 
-	# ip_dict = {}
-	# ip_pseudo = 1
+	ip_dict = {}
+	ip_pseudo = 1
 
-	with open(infile, "r") as f_in, open(outfile, "w") as f_out:
+	with open(infile, "r") as f_in, open(outfile, "w") as f_out, open("./data/relays-50r-180c.csv", "r") as f_csv:
+		# get ip_address and is_guard for each relay from relays.csv
+		reader = csv.reader(f_csv)
+		relay_ips = {rows[0]:rows[3] for rows in reader}
+		#print relay_ips
 		print "Reading file..."
 		n_entries = 0
 		print "Converting to tor format..."
 		for line in f_in:
-#		while True:
-#			line = sys.stdin.readline() # read in a log line from stdin from the shadow log
-#			if line == "":
-#				exit()
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
@@ -106,12 +106,10 @@ if (__name__ == "__main__"):
 
 			if ("CLIENTLOGGING" in line):
 				# pseudonomyize ip addresses
-				# split, ip_dict, ip_pseudo = ip_replace(line, ip_dict, ip_pseudo)
-				split = line.split()
-
-				name = split[4].split("~")[0].replace("[", "") # get the name of relay/node without the IP addr
-				if (name == nodename):
-
+				split, ip_dict, ip_pseudo = ip_replace(line, ip_dict, ip_pseudo)
+				#split = line.split()
+				ip = split[4].split("~")[1].replace("]", "")
+				if (relay_ips.get(ip) == 'True'):
 					# get virtual time
 					hours, minutes, seconds, nano = [int(x) for x in split[2].replace(".",":").split(":")]
 					loglevel = "[notice]"
@@ -119,7 +117,6 @@ if (__name__ == "__main__"):
 					date_fmt = date.strftime("%b %d %H:%M:%S.%f")[0:-3]
 					tor_log = date_fmt + " " + loglevel + " " + " ".join(split[6:]) + "\n"
 					f_out.write(tor_log)
-
 	print "Done\n"
 	# save pseudo ip map
 	# with open(outpickle, "w") as outfile:

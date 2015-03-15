@@ -1,6 +1,6 @@
 from numpy import std
-from sequence_utils import trim_inactive
-from build_models import filter_criteria, log_series
+from sequence_utils import trim_inactive_preprocess
+from build_models import filter_criteria_preprocess, log_series_preprocess
 import sys, cPickle
 
 if __name__ == "__main__":
@@ -14,7 +14,8 @@ if __name__ == "__main__":
 		window_size = data['window_size']
 		records = data['records']
 		for record in records:
-			trimmed = trim_inactive(record['relays_out'])
+			trimmed = trim_inactive_preprocess(
+					record['relays_out'])
 			new_rec = {
 				'ident': record['ident'],
 				'create': record['create'],
@@ -22,7 +23,8 @@ if __name__ == "__main__":
 				'relays_in': None,
 				'relays_out': trimmed,
 			}
-			if filter_criteria(log_series(trimmed)):
+			if filter_criteria_preprocess(
+					log_series_preprocess(trimmed)):
 				good_records.append(new_rec)
 			elif len(trimmed) > 0:
 				rej_records.append(new_rec)

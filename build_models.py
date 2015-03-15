@@ -14,13 +14,18 @@ import sys, cPickle, logging, json
 
 def log_series(series):
 	return ([log(1+o) for o in series[0]], series[1])
-	#return map(lambda o: log(1+o), series[0])
+
+def log_series_preprocess(series):
+	return map(lambda o: log(1+o), series)
 
 def preprocess(series):
 	return map(lambda s: log_series(trim_inactive(s)), series)
 
 def filter_criteria(series):
 	return len(series[0]) > 0 and std(series[0]) > 0
+
+def filter_criteria_preprocess(series):
+	return len(series) > 0 and std(series) > 0
 
 def filter_processed(series):
 	return filter(filter_criteria, series)

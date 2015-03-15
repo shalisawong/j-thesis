@@ -1,4 +1,6 @@
 *.pyc
+*.swp
+*.swo
 *.png
 *.log
 *.gz

@@ -13,7 +13,6 @@ where infile is a scallion.log file.
 	  num_graphs is an integer of the number of graphs wanted
 
 @author: Shalisa Pattarawuttiwong
-Last_Edited: 3/2/15
 '''
 
 import sys, re, subprocess

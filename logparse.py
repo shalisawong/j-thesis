@@ -68,6 +68,7 @@ def is_valid_circ(record):
 	@param record: the record representing a circuit
 	@return: True if the circuit is valid, false otherwise
 	"""
+	#print record
 	return (record['destroy'] is not None and
 		    len(record['relays_in']) >= 3 and
 			len(record['relays_out']) >= 3 and
@@ -88,7 +89,9 @@ if __name__ == "__main__":
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
-			if line[44:50] == "CREATE":
+			split = line.split(" ")
+
+			if split[5] == "CREATE":
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
 				# CREATE was sent.
@@ -100,7 +103,8 @@ if __name__ == "__main__":
 					'relays_in': [],
 					'relays_out': []
 				}
-			elif line[44:51] == "DESTROY":
+
+			elif split[5] == "DESTROY":
 				ident, time = parse_line(line)
 				record = records.get(ident)
 				if record is not None:
@@ -109,11 +113,11 @@ if __name__ == "__main__":
 					# DESTROY was sent.
 					if record['destroy'] is None:
 						record['destroy'] = time
-
-			elif line[44:49] == "RELAY":  # changed from RRC to RELAY
+			
+			elif split[5] == "RELAY":  
 				ident, time = parse_line(line)
 				record = records.get(ident)
-				direc = line[53:55]
+				direc = split[7]
 				if record is not None:
 					if direc == "<-":
 						record['relays_in'].append(time)
