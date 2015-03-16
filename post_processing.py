@@ -1,8 +1,8 @@
 '''
 Automates the post-data collection process.
-	Syntax: python post_processing -getData infile nodename shortname
+	Syntax: python post_processing -getData infile 
 		    python post_processing -visualizations graphing_mode shortname
-		    python post_processing.py -clientSeries infile nodename type_client num_graphs shortname
+		    python post_processing.py -clientSeries infile type_client num_graphs 
 
 where infile is a scallion.log file.
       nodename is the name of a relay/node (ex: relaymiddle2)
@@ -48,8 +48,8 @@ def info_scallion(infile):
 	@param name: a string in the format nodename_numclients (ex: rm2_50)
 
 '''
-def get_data(infile, nodename, name):
-	logshadow_in = "python logshadow.py " + infile + " " + nodename + " " + name + "_tor_fmt.log"
+def get_data(infile, name):
+	logshadow_in = "python logshadow.py " + infile + " " + name + "_tor_fmt.log"
 	subprocess.call(logshadow_in, shell=True)
 	logparse_in = "python logparse.py " + name + "_tor_fmt.log " + name + "_parsed.pickle"
 	subprocess.call(logparse_in, shell=True)
@@ -115,24 +115,24 @@ if __name__ == "__main__":
 	command = sys.argv[1]
 	if command == "-getData":
 		infile = sys.argv[2]  # a scallion.log
-		nodename = sys.argv[3] # a node/relay name
-		name = sys.argv[4] # name in the format nodename_numclients (ex: rm2_50)
-		get_data(infile, nodename, name)
+		#nodename = sys.argv[3] # a node/relay name
+		name = infile[:-4]
+		get_data(infile, name)
 
 	elif command == "-visualizations":
 		graphing_mode = sys.argv[2]
-		name = sys.argv[3] # name in the format nodename_numclients
+		name = sys.argv[3] # name 
 		run_visualizations(graphing_mode, name)
 
 	elif command == "-clientSeries":
 		infile = sys.argv[2] # a scallion.log
-		nodename = sys.argv[3]
-		type_client = sys.argv[4] # web, bulk, perfclient1m, perfclient5m, perfclient50, -allClients
-		num_graphs = int(sys.argv[5]) # number of graphs wanted
-		name = sys.argv[6]
+		#nodename = sys.argv[3]
+		type_client = sys.argv[3] # web, bulk, perfclient1m, perfclient5m, perfclient50, -allClients
+		num_graphs = int(sys.argv[4]) # number of graphs wanted
+		name = infile[:-4]
 
 		ident_list = timeplot_clients.get_ident_list(name + "_trimmed_good.pickle")
-		circ_name_map = timeplot_clients.circuit_client_map(infile, nodename, ident_list)
+		circ_name_map = timeplot_clients.circuit_client_map(infile, ident_list)
 
 		# allClients for type_client will return a dict of all clients
 		ts_ident = timeplot_clients.input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs)

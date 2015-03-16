@@ -9,7 +9,8 @@ from sequence_utils import trim_inactive
 from math import log
 from traceback import print_exc
 from pprint import pprint
-from os.path import isfile
+from os.path import isfile, isdir
+from os import mkdir
 import sys, cPickle, logging, json, arff, subprocess
 
 def log_series(series):
@@ -43,6 +44,8 @@ if __name__ == "__main__":
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
 	print "%i series after preprocessing" % len(filtered)
+	if not isdir(cfg['outdir']):
+		mkdir(cfg['outdir'])
 	for trial_num in xrange(0, cfg['n_trials']):
 		rand_seed = cfg['first_seed'] + trial_num
 		print "** Trial %i of %i **" % (trial_num+1, cfg['n_trials'])
@@ -78,6 +81,9 @@ if __name__ == "__main__":
 						shell = True,
 						stdout=subprocess.PIPE)
 				output, errors = p.communicate()
+				if p.poll() != 0:
+					print "Java subprocess failed"
+					break
 
 				labelings = {}
 				cluster_out = cfg['cluster_outpath']

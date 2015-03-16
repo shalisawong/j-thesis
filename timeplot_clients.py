@@ -12,12 +12,11 @@ import sys, re, cPickle, random
 	returns a dictionary of {client_name: [circ_id1, circ_id2, ...]}. 
 	Checks only valid circuits.
 	@param infile: a scallion.log file
-	@param nodename: the name of a node/relay
 	@param ident_list: a list of the identifiers of the series, 
 		in the format [('circ_id,ip_slug')]
 	@return: a dictionary of {client_name: [circ_id1, circ_id2,...]}. 
 '''
-def circuit_client_map(infile, nodename, ident_list):
+def circuit_client_map(infile, ident_list):
 
 	ip_addresses = {}
 	circuits = {}
@@ -50,7 +49,8 @@ def circuit_client_map(infile, nodename, ident_list):
 				ip_addresses[ip_addr] = name
 
 			# go through circuits and map them to a client
-			if nodename and "CLIENTLOGGING" in line:
+			if "CLIENTLOGGING" in line:
+			#if nodename and "CLIENTLOGGING" in line:
 				split = line.split()
 				circ_id = split[-1]
 				prev_ip = split[8]
@@ -195,12 +195,12 @@ def input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs):
 if __name__ == "__main__":
 	infile = sys.argv[1]
 	parsed_pickle = sys.argv[2]
-	nodename = sys.argv[3]
+	#nodename = sys.argv[3]
 	type_client = sys.argv[4]
 	num_graphs = int(sys.argv[5])
 
 	ident_list = get_ident_list(parsed_pickle)
-	circ_name_map = circuit_client_map(infile, nodename, ident_list) 
+	circ_name_map = circuit_client_map(infile, ident_list) 
 
 	print input_timeplot_clients(circ_name_map, ident_list, type_client, num_graphs)
 

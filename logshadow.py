@@ -82,10 +82,10 @@ def ip_replace(line, ip_dict, ip_pseudo):
 
 if (__name__ == "__main__"):
 	infile = sys.argv[1]
-	nodename = sys.argv[2]  # nodename = name of relay/node wanted --
+	#nodename = sys.argv[2]  # nodename = name of relay/node wanted --
                             # in the example above, this is 2.relay
-	outfile = sys.argv[3]
-	outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle"
+	outfile = sys.argv[2]
+	#outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle"
 
 	ip_dict = {}
 	ip_pseudo = 1
