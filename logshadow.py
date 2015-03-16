@@ -85,7 +85,7 @@ if (__name__ == "__main__"):
 	#nodename = sys.argv[2]  # nodename = name of relay/node wanted --
                             # in the example above, this is 2.relay
 	outfile = sys.argv[2]
-	#outpickle = "pseudo_ip_"+ str(outfile[:-12]) + ".pickle"
+	outpickle = infile[:-4] + "_pseudo_ip.pickle"
 
 	ip_dict = {}
 	ip_pseudo = 1
@@ -117,10 +117,10 @@ if (__name__ == "__main__"):
 					date_fmt = date.strftime("%b %d %H:%M:%S.%f")[0:-3]
 					tor_log = date_fmt + " " + loglevel + " " + " ".join(split[6:]) + "\n"
 					f_out.write(tor_log)
-	print "Done\n"
 	# save pseudo ip map
-	# with open(outpickle, "w") as outfile:
-	# 	ip_dict_flip = {v:k for k, v in ip_dict.items()}
-	# 	cPickle.dump(ip_dict_flip, outfile, protocol=2)
-	# 	print "Dumping ip address dictionary to %s" % outpickle
+	with open(outpickle, "w") as outfile:
+		ip_dict_flip = {v:k for k, v in ip_dict.items()}
+		cPickle.dump(ip_dict_flip, outfile, protocol=2)
+ 		print "Dumping ip address dictionary to %s" % outpickle
+	print "Done\n"
 
