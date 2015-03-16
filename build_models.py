@@ -3,14 +3,14 @@
 '''
 
 from sklearn.cross_validation import train_test_split
-from numpy import std, mean
+from numpy import std, mean, asarray
 from smyth import HMMCluster
 from sequence_utils import trim_inactive
 from math import log
 from traceback import print_exc
 from pprint import pprint
 from os.path import isfile
-import sys, cPickle, logging, json
+import sys, cPickle, logging, json, arff, subprocess
 
 def log_series(series):
 	return ([log(1+o) for o in series[0]], series[1])
@@ -58,8 +58,36 @@ if __name__ == "__main__":
 				else:
 					train = filtered
 				print "Training on %i time series" % len(train)
-				smyth_out = HMMCluster(train, target_m, cfg['min_k'],
-					cfg['max_k'], 'hmm', 'smyth', 'hierarchical', cfg['n_jobs'])
+
+				# padding to longest length series with -99s
+				#print train
+				train_len = len(train)
+				max_seq_len = len(max((i[0] for i in train), key=len))
+				arff_train = []
+				padded_train = []
+				for i in train:
+					pad = (i[0] + [-99.0] * max_seq_len)[:max_seq_len]
+					arff_train.append(pad)
+					padded_train.append([pad,i[1]])
+
+				arff_out = cfg['arffpath']
+				arff.dump(arff_out, arff_train, relation="cellCounts")
+
+				# hand it off to runClustering.java to get clusters
+				p = subprocess.Popen("java clustering/runClustering", 
+						shell = True,
+						stdout=subprocess.PIPE)
+				output, errors = p.communicate()
+
+				labelings = {}
+				cluster_out = cfg['cluster_outpath']
+				with open(cluster_out) as c_file:
+					c_json = json.load(c_file)
+				for k in xrange(cfg['min_k'], cfg['max_k']+1):
+					labelings[k] = asarray(c_json[str(k).encode('utf-8')])
+
+				smyth_out = HMMCluster(padded_train, target_m, cfg['min_k'],
+					cfg['max_k'], labelings, 'hmm', 'smyth', cfg['n_jobs'])
 				"""
 				try:
 					smyth_out.model()

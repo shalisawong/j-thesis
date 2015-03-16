@@ -1,7 +1,7 @@
 {
 
-	"inpath": "rg9_trimmed_good.pickle",
-	"outdir": "rg9",
+	"inpath": "rg8_50r_trimmed_good.pickle",
+	"outdir": "rg8_50r",
 	"first_seed": 0,
 	"n_jobs": null,
 	"min_k": 3,

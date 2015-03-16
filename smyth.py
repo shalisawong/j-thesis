@@ -273,8 +273,8 @@ def kMedoids(args):
 	return kmedoids(dist_matrix, k, n_passes)
 
 class HMMCluster():
-	def __init__(self, S, target_m, min_k, max_k, dist_func='hmm',
-			hmm_init='smyth', clust_alg='hierarchical', n_jobs=None):
+	def __init__(self, S, target_m, min_k, max_k, labels, dist_func='hmm',
+			hmm_init='smyth', n_jobs=None):
 		"""
 		@param S: The sequences to model
 		@param target_m: The desired number of components per HMM. The training
@@ -282,14 +282,13 @@ class HMMCluster():
 			it is not guaranteed. See smythDefaultTriple for details.
 		@param min_k: The minimum number of mixture components to try
 		@param max_k: The maximum number of mixture components to try
+		@param labels: The labelings after clustering
 		@param dist_func: The distance function to use; either 'hmm' or
 			'editdistance'. 'hmm' is Rabiner's symmetrized measure.
 		@param hmm_init: Either 'smyth' or 'random'. 'smyth' causes HMMs to
 			be initialized with Smyth 1997's "default" method. 'random'
 			results in random transition matrices, emission distributions
 			and intial state distributions.
-		@param clust_alg: Either 'hierarchical' or 'kmedoids'. Specifies
-			which clustering algorithm to use.
 		@param n_jobs: How many processes to spawn for parallel computations.
 			If None, cpu_count() processes are created.
 		"""
@@ -298,15 +297,14 @@ class HMMCluster():
 		self.target_m = target_m
 		self.min_k = min_k
 		self.max_k = max_k
+		self.labelings = labels
 		self.dist_func = dist_func
 		self.hmm_init = hmm_init
-		self.clust_alg = clust_alg
 		self._sanityCheck()
 		self.components = {}
 		self.composites = {}
 		self.dist_matrix = None
 		self.partitions = {}
-		self.labelings = {}
 		self.k_values = range(self.min_k, self.max_k+1)
 		self.init_hmms = []
 		self.times = {}
@@ -318,7 +316,7 @@ class HMMCluster():
 		assert self.min_k <= self.max_k
 		assert self.dist_func in ('hmm', 'editdistance')
 		assert self.hmm_init in ('smyth', 'random')
-		assert self.clust_alg in ('hierarchical', 'kmedoids')
+		assert len(self.labelings) > 0
 
 	def _getHMMBatchItems(self):
 		for i in xrange(0, self.n):
@@ -518,7 +516,12 @@ class HMMCluster():
 		dict mapping k values to HMM triples.
 		"""
 		start = clock()
-		self._cluster()
+		# self._cluster()
+
+		for k in self.k_values:
+			clusters = partition(self.S, self.labelings[k])
+			self.partitions[k] = (clusters)
+
 		self._trainModels()
 		self.times['total'] = clock() - start
 		if not self.single_threaded:
