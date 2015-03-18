@@ -1,6 +1,6 @@
 '''
 Automates the post-data collection process.
-	Syntax: python post_processing -getData infile 
+	Syntax: python post_processing -getData infile  
 		    python post_processing -visualizations graphing_mode shortname
 		    python post_processing.py -clientSeries infile type_client num_graphs 
 
@@ -49,7 +49,7 @@ def info_scallion(infile):
 
 '''
 def get_data(infile, name):
-	logshadow_in = "python logshadow.py " + infile + " " + name + "_tor_fmt.log"
+	logshadow_in = "python logshadow.py " + infile + " " + name + "_tor_fmt.log" + " "
 	subprocess.call(logshadow_in, shell=True)
 	logparse_in = "python logparse.py " + name + "_tor_fmt.log " + name + "_parsed.pickle"
 	subprocess.call(logparse_in, shell=True)
@@ -116,6 +116,7 @@ if __name__ == "__main__":
 	if command == "-getData":
 		infile = sys.argv[2]  # a scallion.log
 		#nodename = sys.argv[3] # a node/relay name
+		#relay_csv = sys.argv[3]
 		name = infile[:-4]
 		get_data(infile, name)
 

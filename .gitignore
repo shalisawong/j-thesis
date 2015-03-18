@@ -1,6 +1,10 @@
 *.pyc
 *.swp
 *.swo
+*.swn
+*.swm
+*.swk
+*.swl
 *.png
 *.log
 *.gz

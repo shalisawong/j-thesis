@@ -14,14 +14,15 @@ if __name__ == "__main__":
 		window_size = data['window_size']
 		records = data['records']
 		for record in records:
+			#trimmed = trim_inactive_preprocess(
+			#		record['relays_out'])
 			trimmed = trim_inactive_preprocess(
-					record['relays_out'])
+					record['relays'])
 			new_rec = {
 				'ident': record['ident'],
 				'create': record['create'],
 				'destroy': record['destroy'],
-				'relays_in': None,
-				'relays_out': trimmed,
+				'relays': trimmed,
 			}
 			if filter_criteria_preprocess(
 					log_series_preprocess(trimmed)):

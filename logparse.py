@@ -53,9 +53,10 @@ def parse_line(line):
 
 	split = line.split(" ")
 	circid = int(split[-1], 16) # change from hex to int
-	ipslug = int(split[6], 16)
+	relayip = int(split[4], 16)
+	ipslug = int(split[7], 16)
 	time = parse_time(line[0:19])
-	return ((circid, ipslug), time)
+	return (((relayip, circid), ipslug), time)
 
 def is_valid_circ(record):
 	"""
@@ -84,14 +85,17 @@ if __name__ == "__main__":
 		print "Reading file..."
 		records = {}
 		n_entries = 0
+		c = 0
+		d = 0
+		r = 0
 		print "Parsing..."
 		for line in logfile:
 			n_entries += 1
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
 			split = line.split(" ")
-
-			if split[5] == "CREATE":
+			if split[6] == "CREATE":
+				c = c + 1
 				# In the case of multiple CREATE cells, we define the
 				# beginning of the circuit as the time at which the last
 				# CREATE was sent.
@@ -104,7 +108,8 @@ if __name__ == "__main__":
 					'relays_out': []
 				}
 
-			elif split[5] == "DESTROY":
+			elif split[6] == "DESTROY":
+				d = d + 1
 				ident, time = parse_line(line)
 				record = records.get(ident)
 				if record is not None:
@@ -114,19 +119,24 @@ if __name__ == "__main__":
 					if record['destroy'] is None:
 						record['destroy'] = time
 			
-			elif split[5] == "RELAY":  
+			elif split[6] == "RELAY":
+				r = r + 1
 				ident, time = parse_line(line)
 				record = records.get(ident)
-				direc = split[7]
+				direc = split[8]
 				if record is not None:
 					if direc == "<-":
 						record['relays_in'].append(time)
 					elif direc == "->":
 						record['relays_out'].append(time)
 
+		print "CREATE cells: " + str(c)
+		print "DESTROY cells: " + str(d)
+		print "RELAY cells: " + str(r)
 		with open(outpath, 'w') as outfile:
 			print "Removing invalid circuits..."
 			filtered = filter(is_valid_circ, records.itervalues())
+			#print filtered
 			print "%i circuits total" % len(records)
 			print "%i (%.2f%%) valid circuits" % (len(filtered),
 				100.0*len(filtered)/len(records))

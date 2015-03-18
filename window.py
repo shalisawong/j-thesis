@@ -24,15 +24,55 @@ def window_record(pair):
 	record, window_size = pair
 	ident, create, destroy = record['ident'], record['create'], record['destroy']
 	relays_in, relays_out = record['relays_in'], record['relays_out']
-	windowed_in = window_relays(create, destroy, relays_in, window_size)
-	windowed_out = window_relays(create, destroy, relays_out, window_size)
+	#windowed_in = window_relays(create, destroy, relays_in, window_size)
+	#windowed_out = window_relays(create, destroy, relays_out, window_size)
+	windowed_both = window_allrelays(create, destroy, relays_in, relays_out, window_size)
+	#print windowed_in, windowed_out, windowed_both
+	#return {
+	#	'ident': ident,
+	#	'create': create,
+	#	'destroy': destroy,
+	#	'relays_in': windowed_in,
+	#	'relays_out': windowed_out
+	#}
 	return {
 		'ident': ident,
 		'create': create,
 		'destroy': destroy,
-		'relays_in': windowed_in,
-		'relays_out': windowed_out
+		'relays': windowed_both
 	}
+
+def window_allrelays(create, destroy, relays_in, relays_out, window_size):
+	"""
+	"""
+	circ_len = destroy - create
+	# make all times relative to last CREATE cell sent
+	adj_times_in = [t - create for t in relays_in]
+	adj_times_out = [t - create for t in relays_out]
+	n_windows = max(1, int(round(circ_len/window_size + .5)))
+	windows = []
+	# fill all windows with (0,0) to start
+	for i in xrange(0, n_windows):
+		windows.append([0,0])
+	window_idx = 0
+	window_end = window_size
+	# fill windows with relay in cell counts
+	for time in adj_times_in:
+		if time > window_end:
+			window_idx += 1
+			window_end += window_size
+		windows[window_idx][0] += 1
+	# fill windows with relay out cell counts
+	window_idx = 0
+	window_end = window_size
+	for time in adj_times_out:
+		if time > window_end:
+			window_idx += 1
+			window_end += window_size
+		windows[window_idx][1] += 1
+
+	# convert from list to tuple
+	return [tuple(p) for p in windows]
 
 def window_relays(create, destroy, relays, window_size):
 	"""
@@ -74,6 +114,7 @@ if __name__ == "__main__":
 		print "Windowing %i circuits (parallel)..." % len(records)
 		map_items = zip(records, [window_size] * len(records))
 		windowed = pool.map(window_record, map_items)
+		#print windowed
 		print "Done"
 		output = {
 			'window_size': window_size,

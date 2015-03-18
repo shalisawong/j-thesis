@@ -14,10 +14,11 @@ from os import mkdir
 import sys, cPickle, logging, json, arff, subprocess
 
 def log_series(series):
-	return ([log(1+o) for o in series[0]], series[1])
+	return (map(lambda o: (log(1+o[0]), log(1+o[1])), series[0]), series[1])
+	#return ([[log(1+o[0]), log(1+o[1]] for o in series[0]], series[1])
 
 def log_series_preprocess(series):
-	return map(lambda o: log(1+o), series)
+	return map(lambda o: (log(1+o[0]), log(1+o[1])), series)
 
 def preprocess(series):
 	return map(lambda s: log_series(trim_inactive(s)), series)
@@ -39,10 +40,11 @@ if __name__ == "__main__":
 	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
 	# out_series = [([time_series], ip_addr)]
-	out_series = [(record['relays_out'], record['ident'][1]) for record in records]
+	out_series = [(record['relays'], record['ident'][1]) for record in records]
 	# log transformation and trim inactive
 	preprocessed = preprocess(out_series)
 	filtered = filter_processed(preprocessed)
+	#print filtered
 	print "%i series after preprocessing" % len(filtered)
 	if not isdir(cfg['outdir']):
 		mkdir(cfg['outdir'])
@@ -62,20 +64,34 @@ if __name__ == "__main__":
 					train = filtered
 				print "Training on %i time series" % len(train)
 
-				# padding to longest length series with -99s
-				#print train
+				# flatten train and figure out attribute
+				# names 
 				train_len = len(train)
 				max_seq_len = len(max((i[0] for i in train), key=len))
 				arff_train = []
-				padded_train = []
+				attr_names = []
+				out_train = []
 				for i in train:
-					pad = (i[0] + [-99.0] * max_seq_len)[:max_seq_len]
-					arff_train.append(pad)
-					padded_train.append([pad,i[1]])
+					pad = (i[0] + [('?','?')] * max_seq_len)[:max_seq_len]
+					flat = [count for tup in pad for count in tup]
+					arff_train.append(flat)
+					out_series = []
+					for out in i[0]:
+						out_series.append(out[0])
+					out_train.append((out_series, i[1]))
+				for n in xrange(max_seq_len):
+					attr_names.append(("cellsIn" + str(n), 'REAL'))
+					attr_names.append(("cellsOut" + str(n), 'REAL'))
 
+				arff_obj = {
+					'description': 'Inbound and Outbound Cell Counts',
+					'relation': 'Cell Counts',
+					'attributes': attr_names,
+					'data' : arff_train
+					}
 				arff_out = cfg['arffpath']
-				arff.dump(arff_out, arff_train, relation="cellCounts")
-
+				arff.dump(arff_obj, open(arff_out, 'w'))
+				print "Handing it off to runClustering.java..."
 				# hand it off to runClustering.java to get clusters
 				p = subprocess.Popen("java clustering/runClustering", 
 						shell = True,
@@ -84,6 +100,11 @@ if __name__ == "__main__":
 				if p.poll() != 0:
 					print "Java subprocess failed"
 					break
+				else:
+					print "Clustering completed"
+					if cfg['beta'] < 1:
+						print "Clustering evaluation complete"
+						break
 
 				labelings = {}
 				cluster_out = cfg['cluster_outpath']
@@ -91,8 +112,8 @@ if __name__ == "__main__":
 					c_json = json.load(c_file)
 				for k in xrange(cfg['min_k'], cfg['max_k']+1):
 					labelings[k] = asarray(c_json[str(k).encode('utf-8')])
-
-				smyth_out = HMMCluster(padded_train, target_m, cfg['min_k'],
+				print labelings
+				smyth_out = HMMCluster(out_train, target_m, cfg['min_k'],
 					cfg['max_k'], labelings, 'hmm', 'smyth', cfg['n_jobs'])
 				"""
 				try:

@@ -52,6 +52,7 @@ def flatten(lists):
 def trim_inactive(series):
 	'''
 	@param series: A tuple of (time series, ip address)
+		where the time series are (in, out) cell counts
 	'''
 
 	tail = len(series)
@@ -60,7 +61,7 @@ def trim_inactive(series):
 	found_nonzero = False
 
 	for idx, obs in enumerate(series[0]):
-		if obs < 2:
+		if obs[0] < 2 and obs[1] < 2:
 			if trail_idx == tail:
 				trail_idx = idx
 			if not found_nonzero:
@@ -72,16 +73,15 @@ def trim_inactive(series):
 
 def trim_inactive_preprocess(series):
 	'''
-	@param series: time series
+	@param series: time series of [in, out] cell counts
 	'''
-
 	tail = len(series)
 	lead_idx = 0
 	trail_idx = tail
 	found_nonzero = False
-
+	#print series
 	for idx, obs in enumerate(series):
-		if obs < 2:
+		if obs[0] < 2 and obs[1] < 2:
 			if trail_idx == tail:
 				trail_idx = idx
 			if not found_nonzero:
@@ -89,6 +89,7 @@ def trim_inactive_preprocess(series):
 		else:
 			trail_idx = tail
 			found_nonzero = True
+	#print series[lead_idx:trail_idx]
 	return series[lead_idx:trail_idx]
 
 

@@ -33,7 +33,7 @@ Since tor itself pseudonymizes ip addresses, don't need ip_replace
 
 from datetime import datetime
 from pprint import pprint
-import sys, re, cPickle, csv
+import sys, re, cPickle
 
 '''
 	Pseudonymizes the ip addresses.
@@ -44,8 +44,17 @@ import sys, re, cPickle, csv
 			the dictionary of the form {real_ip_address: pseudo_ip_address},
 			and the integer representing the pseudonymized ip address
 '''
-def ip_replace(line, ip_dict, ip_pseudo):
-	split = line.split()
+def ip_replace(split, ip_dict, ip_pseudo):
+	# split = line.split()
+	relay_ip = split[4].split("~")[1].replace("]", "")
+	if (relay_ip in ip_dict):
+		new_relay_ip = ip_dict.get(relay_ip)
+	else:
+		hex_relay_ip = hex(ip_pseudo)[2:]
+		ip_dict[relay_ip] = hex_relay_ip
+		new_relay_ip = hex_relay_ip
+		ip_pseudo += 1
+	split[4] = str(new_relay_ip)
 
 	# grab ip addresses
 	p_relay = split[8]
@@ -89,12 +98,15 @@ if (__name__ == "__main__"):
 
 	ip_dict = {}
 	ip_pseudo = 1
+	num_cl = 0
+	unique_sc = 0
+	sc = 0
+	trans_comp = 0
+	built = 0
+	sc_dict = []
 
-	with open(infile, "r") as f_in, open(outfile, "w") as f_out, open("./data/relays-50r-180c.csv", "r") as f_csv:
-		# get ip_address and is_guard for each relay from relays.csv
-		reader = csv.reader(f_csv)
-		relay_ips = {rows[0]:rows[3] for rows in reader}
-		#print relay_ips
+# ./data/relays-50r-180c.csv
+	with open(infile, "r") as f_in, open(outfile, "w") as f_out:
 		print "Reading file..."
 		n_entries = 0
 		print "Converting to tor format..."
@@ -103,20 +115,38 @@ if (__name__ == "__main__"):
 			if n_entries % 50000 == 0 and n_entries != 0:
 				print "%i entries processed" % n_entries
 
+			split = line.split()
+			if "BUILT" in line:
+				built = built + 1
 
-			if ("CLIENTLOGGING" in line):
+			if "GET" in line and "transfer-complete" in line:
+				trans_comp = trans_comp + 1
+
+			if "SENTCONNECT" in line and split[-1].split(":")[1] == "80":
+				sc = sc + 1
+				if [split[12],split[4]] not in sc_dict:
+					sc_dict.append([split[12],split[4]])
+					unique_sc = unique_sc + 1
+		
+			# previous relay is a client
+			if (split[6] == "CLIENTLOGGING:" and split[8].startswith("11.0.")):
+				num_cl = num_cl + 1
 				# pseudonomyize ip addresses
-				split, ip_dict, ip_pseudo = ip_replace(line, ip_dict, ip_pseudo)
-				#split = line.split()
-				ip = split[4].split("~")[1].replace("]", "")
-				if (relay_ips.get(ip) == 'True'):
-					# get virtual time
-					hours, minutes, seconds, nano = [int(x) for x in split[2].replace(".",":").split(":")]
-					loglevel = "[notice]"
-					date = datetime(2013, 1, 1, hours, minutes, seconds, nano/1000)
-					date_fmt = date.strftime("%b %d %H:%M:%S.%f")[0:-3]
-					tor_log = date_fmt + " " + loglevel + " " + " ".join(split[6:]) + "\n"
-					f_out.write(tor_log)
+				split, ip_dict, ip_pseudo = ip_replace(split, ip_dict, ip_pseudo)
+				ip = split[4]
+				# get virtual time
+				hours, minutes, seconds, nano = [int(x) for x in split[2].replace(".",":").split(":")]
+				loglevel = "[notice]"
+				date = datetime(2013, 1, 1, hours, minutes, seconds, nano/1000)
+				date_fmt = date.strftime("%b %d %H:%M:%S.%f")[0:-3]
+				tor_log = date_fmt + " " + loglevel + " " + ip + " " + " ".join(split[6:]) + "\n"
+				f_out.write(tor_log)
+
+	print "\ntotal SENTCONNECT: " + str(sc)
+	print "unique SENTCONNECT: " + str(unique_sc)
+	print "total GET: " + str(trans_comp)
+	print "total BUILT: " + str(built)
+	print "Filtered cell count: " + str(num_cl)
 	# save pseudo ip map
 	with open(outpickle, "w") as outfile:
 		ip_dict_flip = {v:k for k, v in ip_dict.items()}
