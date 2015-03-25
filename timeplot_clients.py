@@ -13,7 +13,7 @@ import sys, re, cPickle, random
 	Checks only valid circuits.
 	@param infile: a scallion.log file
 	@param ident_list: a list of the identifiers of the series, 
-		in the format [('circ_id,ip_slug')]
+		in the format [('circ_id,ip_slug')] - circ_id = (relay_id, circ_id)
 	@return: a dictionary of {client_name: [circ_id1, circ_id2,...]}. 
 '''
 def circuit_client_map(infile, ident_list):
@@ -21,8 +21,9 @@ def circuit_client_map(infile, ident_list):
 	ip_addresses = {}
 	circuits = {}
 	circ_name_map = {}
-	valid_circs = [hex(i[0])[2:] for i in ident_list]
-
+	valid_circs = [(i[0][0], hex(i[0][1])[2:]) for i in ident_list] # (relay_ip, circ_id)
+	#valid_circs = [hex(i[0][1])[2:] for i in ident_list]
+	#print valid_circs
 	with open(infile) as f:
 		print "Reading file..."
 		n_entries = 0
@@ -48,25 +49,27 @@ def circuit_client_map(infile, ident_list):
  
 				ip_addresses[ip_addr] = name
 
+			split = line.split()
 			# go through circuits and map them to a client
-			if "CLIENTLOGGING" in line:
+			if ("CLIENTLOGGING" in line and split[8].startswith("11.0.")):
 			#if nodename and "CLIENTLOGGING" in line:
-				split = line.split()
+				relay_ip = split[4].split("~")[0].replace("[","")
 				circ_id = split[-1]
 				prev_ip = split[8]
 
-				if circ_id in valid_circs and circ_id not in circuits:
-						circuits[circ_id] = prev_ip
-				
+				if ((relay_ip,circ_id) in valid_circs 
+						and (relay_ip,circ_id) not in circuits):
+					circuits[(relay_ip, circ_id)] = prev_ip
+		
+		#print circuits
 		for circ in circuits:
 				name = ip_addresses[circuits.get(circ)]
 
 				if name not in circ_name_map:
-					circ_name_map[name] = [int(circ, 16)]
+					circ_name_map[name] = [(circ[0],int(circ[1], 16))]
 				elif name in circ_name_map:
 					circ_list = circ_name_map.get(name)
-					circ_list.append(int(circ, 16))
-		
+					circ_list.append((circ[0],int(circ[1],16)))
 	return circ_name_map # dict of {clientname:[circ1,circ2,circ3]}
 
 '''
@@ -83,6 +86,7 @@ def get_ident_list(parsed_pickle_file):
 			for record in records:
 					ident = record['ident']
 					ident_list.append(ident)
+			#print ident_list
 			return ident_list
 
 '''
@@ -128,10 +132,11 @@ def write_client_info_log(circ_name_map, ident_list):
 def input_timeplot_single_client(circ_name_map, ident_list, type_client, num_graphs):
 	filt_circ_name_map = {k:v for (k,v) in circ_name_map.iteritems() if type_client in k}
 	totalcircs = sum(len(v) for v in filt_circ_name_map.itervalues())
-	print filt_circ_name_map, totalcircs
+	#print filt_circ_name_map, totalcircs
 	ident_string = ''
 	repeat = []
 
+	#print ident_list
 	while num_graphs > 0:
 		# pick client and specific circuit.. may have issues if num_graphs > num_totalcircs
 		client = random.choice(filt_circ_name_map.keys())

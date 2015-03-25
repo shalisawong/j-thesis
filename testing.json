@@ -1,17 +1,20 @@
 {
 
 	"inpath": "./data/shadow-50r-180c_trimmed_good.pickle",
+	"gt_path": "./data/shadow-50r-180c_pseudo_ip.pickle",
+	"gt_outpath": "./data/shadow-50r-180c_ground_truth.json",
+	"shadow_path": "./data/shadow-50r-180c.log",
 	"outdir": "50r_180c-result",
 	"first_seed": 0,
 	"n_jobs": 1,
-	"min_k": 3,
+	"min_k": 2,
 	"max_k": 10,
-	"min_m": 3,
+	"min_m": 2,
 	"max_m": 10,
-	"beta": 0.5,
+	"beta": 1,
 	"n_trials": 1,
    	"cluster_alg" : "hierarchical",
-    	"dist_measure" : "edit distance",
+    	"dist_measure" : "euclidean",
     	"arffpath" : "./seriesdata.arff",
     	"cluster_outpath" : "./clusters.json"
 }

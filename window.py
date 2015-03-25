@@ -121,4 +121,5 @@ if __name__ == "__main__":
 			'records': windowed
 		}
 		print "Dumping to %s" % outpath
-		cPickle.dump(output, out_file, protocol=2)
+		cPickle.dump(output, out_file, protocol=2
+			)

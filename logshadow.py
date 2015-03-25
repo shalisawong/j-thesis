@@ -46,15 +46,16 @@ import sys, re, cPickle
 '''
 def ip_replace(split, ip_dict, ip_pseudo):
 	# split = line.split()
-	relay_ip = split[4].split("~")[1].replace("]", "")
-	if (relay_ip in ip_dict):
-		new_relay_ip = ip_dict.get(relay_ip)
-	else:
-		hex_relay_ip = hex(ip_pseudo)[2:]
-		ip_dict[relay_ip] = hex_relay_ip
-		new_relay_ip = hex_relay_ip
-		ip_pseudo += 1
-	split[4] = str(new_relay_ip)
+	relay_ip = split[4].split("~")[0].replace("[", "")
+	#if (relay_ip in ip_dict):
+	#	new_relay_ip = ip_dict.get(relay_ip)
+	#else:
+	#	hex_relay_ip = hex(ip_pseudo)[2:]
+	#	ip_dict[relay_ip] = hex_relay_ip
+	#	new_relay_ip = hex_relay_ip
+	#	ip_pseudo += 1
+	#split[4] = str(new_relay_ip)
+	split[4] = relay_ip
 
 	# grab ip addresses
 	p_relay = split[8]

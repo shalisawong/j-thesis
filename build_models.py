@@ -11,7 +11,7 @@ from traceback import print_exc
 from pprint import pprint
 from os.path import isfile, isdir
 from os import mkdir
-import sys, cPickle, logging, json, arff, subprocess
+import sys, cPickle, logging, json, arff, subprocess, re
 
 def log_series(series):
 	return (map(lambda o: (log(1+o[0]), log(1+o[1])), series[0]), series[1])
@@ -39,6 +39,8 @@ if __name__ == "__main__":
 		cfg = json.load(cfg_file)
 	with open(cfg['inpath']) as datafile:
 		records = cPickle.load(datafile)['records']
+	with open(cfg['gt_path']) as gt_file:
+		gt = cPickle.load(gt_file)
 	# out_series = [([time_series], ip_addr)]
 	out_series = [(record['relays'], record['ident'][1]) for record in records]
 	# log transformation and trim inactive
@@ -71,14 +73,65 @@ if __name__ == "__main__":
 				arff_train = []
 				attr_names = []
 				out_train = []
+				ground_truth = []
 				for i in train:
-					pad = (i[0] + [('?','?')] * max_seq_len)[:max_seq_len]
+					# pad with -1.0 - destroy state
+					pad = (i[0] + [('-1.0','-1.0')] * max_seq_len)[:max_seq_len]
 					flat = [count for tup in pad for count in tup]
 					arff_train.append(flat)
 					out_series = []
 					for out in i[0]:
 						out_series.append(out[0])
 					out_train.append((out_series, i[1]))
+
+
+
+					ground_truth.append(gt[hex(i[1])[2:]])
+				# Find labels for ground truth
+				ip_addresses = {}
+				with open(cfg['shadow_path']) as f:
+					print "Reading file..."
+					n_entries = 0
+					print "Mapping Clients and Circuits..."
+					for line in f:
+						n_entries += 1
+						if n_entries % 50000 == 0 and n_entries != 0:
+							print "%i entries processed" % n_entries
+
+						# done in the beginning of scallion.log	
+						if "Created Host" in line:
+
+							ip = '(([0-9][0-9]?[0-9]?\\.){3}([0-9][0-9]?[0-9]?))'
+
+							# find name and ip address of host
+							try:
+								name = re.search("'(.+?)'", line).group(1)
+								ip_addr = re.search(ip, line).group(0)
+
+							except AttributeError:
+								print "'Created Host' found with either no host name or ip address."
+								break;
+ 
+							ip_addresses[ip_addr] = name
+						elif "CLIENTLOGGING" in line:
+							break;
+				gt_clients = [ip_addresses[i] for i in ground_truth]
+				web = 0;
+				bulk = 1;
+				gt_labels = []
+				for l in gt_clients:
+					if "web" in l:
+						gt_labels.append(web)
+					elif "bulk" in l:
+						gt_labels.append(bulk)
+					else:
+						print "Not web or bulk client"
+				print "\nGround Truth Labels: "
+				print gt_labels
+				# write out to gt.json
+				with open(cfg['gt_outpath'], 'w') as gt_out:
+					json.dump({'ground truth':gt_labels},gt_out)
+
 				for n in xrange(max_seq_len):
 					attr_names.append(("cellsIn" + str(n), 'REAL'))
 					attr_names.append(("cellsOut" + str(n), 'REAL'))
@@ -93,18 +146,24 @@ if __name__ == "__main__":
 				arff.dump(arff_obj, open(arff_out, 'w'))
 				print "Handing it off to runClustering.java..."
 				# hand it off to runClustering.java to get clusters
-				p = subprocess.Popen("java clustering/runClustering", 
-						shell = True,
-						stdout=subprocess.PIPE)
-				output, errors = p.communicate()
-				if p.poll() != 0:
-					print "Java subprocess failed"
+				p = subprocess.Popen(["/usr/bin/java", "clustering/runClustering"],
+						stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+				while p.poll() is None:
+					l = p.stdout.readline()
+					print l
+				print p.stdout.read()
+				#output, errors = p.communicate()
+				#for line in output:
+				#	print line
+					#sys.stdout.flush()
+				#if p.poll() != 0:
+				#	print "Java subprocess failed"
+				#	break
+				#else:
+				print "Clustering completed"
+				if cfg['beta'] >= 1:
+					print "Clustering evaluation complete"
 					break
-				else:
-					print "Clustering completed"
-					if cfg['beta'] < 1:
-						print "Clustering evaluation complete"
-						break
 
 				labelings = {}
 				cluster_out = cfg['cluster_outpath']

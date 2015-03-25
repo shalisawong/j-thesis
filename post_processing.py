@@ -45,7 +45,7 @@ def info_scallion(infile):
 		Syntax: python post_processing -get_data infile nodename shortname
 	@param infile: a scallion.log file
 	@param nodename: the name of a relay/node
-	@param name: a string in the format nodename_numclients (ex: rm2_50)
+	@param name: a string
 
 '''
 def get_data(infile, name):
@@ -62,7 +62,6 @@ def get_data(infile, name):
 	Runs visualization code
 		Syntax: python post_processing -visualizations graphing_mode shortname
 	@param graphing_mode: the plot wanted (-summarize, -horizon, -colorplots, -allPlots)
-	@param name: a string in the format nodename_numclients (ex: rm2_50)
 '''
 def run_visualizations(graphing_mode, name):
 	filename = name + "_trimmed_good.pickle"
@@ -89,7 +88,7 @@ def run_visualizations(graphing_mode, name):
 	Runs visualization code which outputs time plots for a specific client
 	@param typeclient: name of the client wanted
 		(web, bulk, perfclient50k, perfclient1m, perclient5m, -allClients)
-	@param name: a string in the format nodename_numclients (ex: rm2_50)
+	@param name: a string of the name of the file
 	@param ts_ident: identifier of the single series to view, in the format 'circ_id,ip_slug'.
 '''
 def time_plot_client(type_client, name, ts_ident):
@@ -107,7 +106,7 @@ def time_plot_client(type_client, name, ts_ident):
 		print "\nPlotting PerfClients5MiB..."
 		time_plot_client('perf5m', name, ts_ident.get('perf5m'))
 	else:
-		timeplot_in = "python exploratory.py -timeplot " + filename + " O 50 " + ts_ident
+		timeplot_in = "python exploratory.py -timeplot " + filename + " 50 " + ts_ident
 		subprocess.call(timeplot_in, shell=True)
 
 
