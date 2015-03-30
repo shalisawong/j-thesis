@@ -80,8 +80,9 @@ if __name__ == "__main__":
 					flat = [count for tup in pad for count in tup]
 					arff_train.append(flat)
 					out_series = []
+	
 					for out in i[0]:
-						out_series.append(out[0])
+						out_series.append(out[1])
 					out_train.append((out_series, i[1]))
 
 
@@ -118,12 +119,15 @@ if __name__ == "__main__":
 				gt_clients = [ip_addresses[i] for i in ground_truth]
 				web = 0;
 				bulk = 1;
+				perf = 2;
 				gt_labels = []
 				for l in gt_clients:
 					if "web" in l:
 						gt_labels.append(web)
 					elif "bulk" in l:
 						gt_labels.append(bulk)
+					elif "perf" in l:
+						gt_labels.append(perf)
 					else:
 						print "Not web or bulk client"
 				print "\nGround Truth Labels: "
@@ -144,6 +148,9 @@ if __name__ == "__main__":
 					}
 				arff_out = cfg['arffpath']
 				arff.dump(arff_obj, open(arff_out, 'w'))
+				
+				print "Clustering Algorithm: " + cfg['cluster_alg']
+				print "Distance Measure: " + cfg['dist_measure']
 				print "Handing it off to runClustering.java..."
 				# hand it off to runClustering.java to get clusters
 				p = subprocess.Popen(["/usr/bin/java", "clustering/runClustering"],
@@ -171,7 +178,7 @@ if __name__ == "__main__":
 					c_json = json.load(c_file)
 				for k in xrange(cfg['min_k'], cfg['max_k']+1):
 					labelings[k] = asarray(c_json[str(k).encode('utf-8')])
-				print labelings
+				#print labelings
 				smyth_out = HMMCluster(out_train, target_m, cfg['min_k'],
 					cfg['max_k'], labelings, 'hmm', 'smyth', cfg['n_jobs'])
 				"""

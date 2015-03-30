@@ -25,16 +25,25 @@ if __name__ == "__main__":
 	print "done"
 	with open(records_path) as records_file:
 		records = cPickle.load(records_file)['records']
-		out_series = [(record['relays_out'], record['ident'][1]) for record in records]
-		processed = preprocess(out_series)
+		series = [(record['relays'], record['ident'][1]) for record in records]
+		processed = preprocess(series)
 		filtered = filter_processed(processed)
+		out_filt = []
+
+		# grab just the outbound series
+		for i in filtered:
+			temp_series = []
+			for out in i[0]:
+				temp_series.append(out[1])
+			out_filt.append((temp_series, i[1]))
+
 		batch_items = []
 		pool = Pool()
 		for result in agg_results:
 			rand_seed = result['rand_seed']
 			beta = result['beta']
 			target_m = result['target_m']
-			train, test_array = train_test_split(filtered,
+			train, test_array = train_test_split(out_filt,
 				train_size=beta, random_state=rand_seed)
 			test = [series[0] for series in test_array]
 			for k, comp in result['components'].iteritems():
