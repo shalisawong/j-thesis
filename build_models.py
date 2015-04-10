@@ -15,7 +15,6 @@ import sys, cPickle, logging, json, arff, subprocess, re
 
 def log_series(series):
 	return (map(lambda o: (log(1+o[0]), log(1+o[1])), series[0]), series[1])
-	#return ([[log(1+o[0]), log(1+o[1])] for o in series[0]], series[1])
 
 def rev_log_series(series):
 	return (map(lambda o: (int(round(exp(o[0])-1)), 
@@ -48,7 +47,6 @@ if __name__ == "__main__":
 		records = cPickle.load(datafile)['records']
 	with open(cfg['gt_path']) as gt_file:
 		gt = cPickle.load(gt_file)
-	# out_series = [([time_series], ip_addr)]
 	out_series = [(record['relays'], record['ident'][1]) for record in records]
 	# log transformation and trim inactive
 	preprocessed = preprocess(out_series)
@@ -68,7 +66,6 @@ if __name__ == "__main__":
 		else:
 			train = filtered
 		print "Training on %i time series" % len(train)
-		#print train
 		# flatten train and figure out attribute
 		# names 
 		train_len = len(train)
