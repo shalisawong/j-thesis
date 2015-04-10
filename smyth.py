@@ -306,6 +306,7 @@ class HMMCluster():
 		self.dist_matrix = None
 		self.partitions = {}
 		self.k_values = range(self.min_k, self.max_k+1)
+		self.calc_ks = []
 		self.init_hmms = []
 		self.times = {}
 		self.single_threaded = n_jobs == -1
@@ -466,7 +467,8 @@ class HMMCluster():
 		# Build a list of mapping items to submit as a bulk job
 		# for each k_value (predicted range of clusters)given
 		for k in self.k_values:
-			
+			clusSeen = 0
+
 			# Grab the partition with time series split into k clusters 
 			partition = self.partitions[k]
 			for cluster in partition:
@@ -479,6 +481,10 @@ class HMMCluster():
 				seq_lens.append(map(lambda s: len(s), series))
 				batch_items.append((series, self.target_m))
 				cluster_ips.append(ips)
+				clusSeen += 1
+
+			self.calc_ks.append(clusSeen)
+
 		# initialize components[k]
 		for k in self.k_values:
 			self.components[k] = {
@@ -494,8 +500,11 @@ class HMMCluster():
 		printAndFlush("done")
 		idx = 0
 		# Reconstruct the mixtures for each k from the list of trained HMMS
+		# Some algorithms may produce fewer clusters than set
+		actualClusSize = 0
 		for k in self.k_values:
-			for i in xrange(0, k):
+			#for i in xrange(0, k):
+			for i in xrange(0, self.calc_ks[actualClusSize]):
 				cluster_size = cluster_sizes[idx]
 				inclust_seq_lens = seq_lens[idx]
 				hmm_triple = hmm_triples[idx]
@@ -505,7 +514,7 @@ class HMMCluster():
 				self.components[k]['seq_lens'].append(inclust_seq_lens)
 				self.components[k]['cluster_ips'].append(cluster_ip)
 				idx += 1
-			self.composites[k] = compositeTriple(self.components[k])
+			actualClusSize += 1
 		print "done"
 
 	def model(self):

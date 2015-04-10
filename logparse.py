@@ -28,6 +28,12 @@ from pprint import pprint
 from datetime import datetime
 import sys, cPickle
 
+no_destroy = 0
+no_relays = 0
+create_after_relay = 0
+relay_after_destroy = 0
+
+
 def parse_time(time_str):
 	"""
 	Parse a time string from the hack_tor logfile. Returns the number
@@ -71,6 +77,22 @@ def is_valid_circ(record):
 	@return: True if the circuit is valid, false otherwise
 	"""
 	#print record
+	if (record['destroy'] is None):
+		global no_destroy
+		no_destroy += 1
+	else:
+		if (len(record['relays_in']) <= 3) or (len(record['relays_out']) <= 3):
+			global no_relays
+			no_relays += 1
+		else:
+			if (record['relays_out'][0] <= record['create']) or (record['relays_in'][0] <= record['create']):
+				global create_after_relay
+				create_after_relay += 1
+			else:
+				if (record['relays_out'][-1] >= record['destroy']) or (record['relays_in'][-1] >= record['destroy']):
+					global relay_after_destroy
+					relay_after_destroy += 1		
+
 	return (record['destroy'] is not None and
 		    len(record['relays_in']) >= 3 and
 			len(record['relays_out']) >= 3 and
@@ -144,6 +166,10 @@ if __name__ == "__main__":
 			print "Dumping valid circuits to %s" % outpath
 
 			cPickle.dump(filtered, outfile, protocol=2)
+			print "NO DESTROY: " + str(no_destroy)
+			print "FEW RELAYS: " + str(no_relays)
+			print "CREATE AFTER RELAY: " + str(create_after_relay)
+			print "RELAY AFTER DESTROY: " + str(relay_after_destroy)	
 			print "Done\n"
 
 

@@ -345,7 +345,70 @@ def do_timeplot(records, window_size, ts_ident_list):
 	fig.text(0.5, 0.04, 'Window # (%i ms windows)'% window_size, ha='center', va='center')
 	fig.text(0.06, 0.5, 'Outgoing Relay Cell Count', ha='center', va='center', rotation='vertical')
 
+# outbound only
 def do_colorplot(records, window_size, ax=None, ay=None, no_chrome=False,
+	sample_size=1000):
+	"""
+	Display a color plots for a size 1000 random sample of records
+	@param records: the circuit records
+	@param window_size: the size of the cell count windows
+	"""
+	def rec_cmp(rec_1, rec_2):
+		relays_1, relays_2 = rec_1['relays'], rec_2['relays']
+		m_r1, m_r2= ((mean([i[0] for i in relays_1]) + 
+			mean([i[1] for i in relays_1])), 
+			(mean([i[0] for i in relays_2]) + 
+			mean([i[1] for i in relays_2])))
+		if len(relays_1) == len(relays_2):
+			if m_r1 == m_r2: return 0
+			elif m_r1 > m_r2: return 1
+			else: return -1
+		elif len(relays_1) > len(relays_2):
+			return 1
+		else:
+			return -1
+	sample = draw_sample(records, sample_size)
+	sample.sort(cmp=rec_cmp)
+	N_CLUSTERS = 6
+	colors =[(1.0*i/N_CLUSTERS,)*3 for i in xrange(1, N_CLUSTERS+1)]
+	cmap = ListedColormap(colors)
+	relay_series = [record['relays'] for record in sample]
+
+	out_relay_series = []
+	for r in relay_series:
+		newTupOut = []
+		for tup in r:
+			newTupOut.append(tup[1])
+		out_relay_series.append(newTupOut)
+
+	vmin = 0
+	vmax = VMAX
+	if ax is None:
+		fig = plt.figure()
+		fig.canvas.mpl_connect('pick_event', on_pick)
+		ax = fig.add_subplot(111)
+		ax.get_yaxis().set_ticks([])
+	if not no_chrome:
+		plt.title("Outbound Luminance Plot (n=%i)" % len(sample))
+		plt.xlabel("Window # (%i ms windows)" % window_size)
+		plt.ylabel("Client")
+		# legend_rects = [Rectangle((0, 0), 1, 1, fc=c) for c in reversed(colors)]
+		# legend_labels = ["%i-%i cells" % c for c in reversed(cluster_ranges)]
+		# plt.legend(legend_rects, legend_labels, loc=4)
+	n = 0
+	for i in xrange(0, len(sample)):
+		series = out_relay_series[i]
+		ident = sample[i]['ident']
+		artist = ax.scatter(range(0, len(series)), [n]*len(series),
+			c=series, marker="s", edgecolors='none', vmin=vmin, vmax=40,
+			cmap=cm.gray, picker=True)
+		n += 2
+		artist_ident_map[ident] = artist
+	if not no_chrome:
+		fig.colorbar(artist)
+
+# inbound and outbound
+def do_colorplot_both(records, window_size, ax=None, ay=None, no_chrome=False,
 	sample_size=1000):
 	"""
 	Display a color plots for a size 1000 random sample of records
@@ -404,7 +467,7 @@ def do_colorplot(records, window_size, ax=None, ay=None, no_chrome=False,
 		ident = sample[i]['ident']
 		artist = ax.scatter(range(0, len(series)), [n]*len(series),
 			c=series, marker="s", edgecolors='none', vmin=vmin, vmax=vmax,
-			cmap=cm.coolwarm, picker=True)
+			cmap=cm.gray, picker=True)
 		n += 2
 		artist_ident_map[ident] = artist
 
@@ -424,7 +487,7 @@ def do_colorplot(records, window_size, ax=None, ay=None, no_chrome=False,
 		ident = sample[i]['ident']
 		artist = ay.scatter(range(0, len(series)), [n]*len(series),
 			c=series, marker="s", edgecolors='none', vmin=vmin, vmax=vmax,
-			cmap=cm.coolwarm, picker=True)
+			cmap=cm.gray, picker=True)
 		n += 2
 		artist_ident_map[ident] = artist
 

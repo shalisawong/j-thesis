@@ -37,21 +37,38 @@ if __name__ == "__main__":
 				temp_series.append(out[1])
 			out_filt.append((temp_series, i[1]))
 
-		batch_items = []
+		batch_items_test = []
+		batch_items_train = []
 		pool = Pool()
 		for result in agg_results:
 			rand_seed = result['rand_seed']
 			beta = result['beta']
 			target_m = result['target_m']
-			train, test_array = train_test_split(out_filt,
+			train_array, test_array = train_test_split(out_filt,
 				train_size=beta, random_state=rand_seed)
+			train = [series[0] for series in train_array]
 			test = [series[0] for series in test_array]
 			for k, comp in result['components'].iteritems():
 				triple = compositeTriple(comp)
-				batch_items.append((k, target_m, triple, rand_seed, list(test)))
-		print "Computing likelihoods (parallel)..."
-		likelihoods = pool.map(getLikelihood, batch_items)
+				batch_items_test.append((k, target_m, triple,
+					rand_seed, list(train)))
+
+			for k, comp in result['components'].iteritems():
+				triple = compositeTriple(comp)
+				batch_items_train.append((k, target_m, triple, rand_seed, list(test)))
+		print "Computing train likelihoods (parallel)..."
+		likelihoodsTrain = pool.map(getLikelihood, batch_items_train)
+		print "Computing test likelihoods (parallel)..."
+		likelihoodsTest = pool.map(getLikelihood, batch_items_test)
+		print likelihoodsTrain
+		print likelihoodsTest
 		print "done"
-		with open(outpath, 'w') as out_file:
-			print "Dumping to %s" % outpath
-			cPickle.dump(likelihoods, out_file)
+		outTrain = outpath + "train"
+		outTest = outpath + "test"
+		with open(outTrain, 'w') as out_file:
+			print "Dumping to %s" % outTrain
+			cPickle.dump(likelihoodsTrain, out_file)
+		with open(outTest, 'w') as out_file:
+			print "Dumping to %s" % outTest
+			cPickle.dump(likelihoodsTest, out_file)
+
